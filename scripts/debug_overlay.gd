@@ -66,7 +66,8 @@ func _process(delta: float) -> void:
 		"",
 		"F1 overlay   F2 spawn wave   F3 render scale",
 		"F4 clear foes   [ / ] witch level   F6 heal",
-		"F7 snap rank %d   F8 pierce rank %d   Esc controls" % [Game.balance.snap_rank + 1, Game.balance.pierce_rank + 1],
+		"F7 snap rank %d   F8 pierce rank %d   F9 reset cooldowns" % [Game.balance.snap_rank + 1, Game.balance.pierce_rank + 1],
+		"F10 send/draw rank %d   F11 rend rank %d   Esc controls" % [Game.balance.send_rank + 1, Game.balance.rend_rank + 1],
 	])
 	_label.text = "\n".join(lines)
 	_label.add_theme_color_override("font_color", Color(1, 0.55, 0.5) if orphans > 0 else Color(0.92, 0.9, 0.98))

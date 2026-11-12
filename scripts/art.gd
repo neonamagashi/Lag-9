@@ -110,6 +110,69 @@ static func burst(parent: Node, pos: Vector3, color: Color, amount := 24) -> voi
 	p.finished.connect(p.queue_free)
 
 
+static func ghost(model: Node3D, parent: Node, color: Color, alpha: float, life: float) -> void:
+	var m := glow(color, alpha)
+	var root := Node3D.new()
+	parent.add_child(root)
+	for child in model.find_children("*", "MeshInstance3D", true, false):
+		var src: MeshInstance3D = child
+		if not src.is_visible_in_tree():
+			continue
+		var mi := MeshInstance3D.new()
+		mi.mesh = src.mesh
+		mi.material_override = m
+		root.add_child(mi)
+		mi.global_transform = src.global_transform
+	var tw := root.create_tween()
+	tw.tween_property(m, "albedo_color:a", 0.0, life)
+	tw.tween_callback(root.queue_free)
+
+
+static func ring_pulse(parent: Node, pos: Vector3, color: Color, radius: float, life: float) -> void:
+	var t := TorusMesh.new()
+	t.inner_radius = 0.85
+	t.outer_radius = 1.0
+	t.rings = 32
+	t.ring_segments = 3
+	var m := glow(color, 0.9)
+	var mi := mesh(t, m, Vector3.ZERO, parent)
+	mi.global_position = pos
+	mi.scale = Vector3(0.3, 0.3, 0.3)
+	var tw := mi.create_tween()
+	tw.set_parallel()
+	tw.tween_property(mi, "scale", Vector3(radius, radius * 0.6, radius), life).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(m, "albedo_color:a", 0.0, life)
+	tw.chain().tween_callback(mi.queue_free)
+
+
+static func cone_flash(parent: Node, origin: Vector3, dir: Vector3, length: float, half_angle: float, color: Color, inward: bool) -> void:
+	var c := CylinderMesh.new()
+	c.top_radius = 0.05
+	c.bottom_radius = length * tan(half_angle)
+	c.height = length
+	c.radial_segments = 16
+	c.rings = 1
+	c.cap_top = false
+	c.cap_bottom = false
+	var m := glow(color, 0.35)
+	var pivot := Node3D.new()
+	parent.add_child(pivot)
+	pivot.global_position = origin
+	pivot.look_at(origin + dir, Vector3.UP)
+	var mi := mesh(c, m, Vector3(0, 0, -length * 0.5), pivot)
+	mi.rotation.x = PI / 2
+	var tw := pivot.create_tween()
+	tw.set_parallel()
+	if inward:
+		pivot.scale = Vector3(1.15, 1.15, 1.15)
+		tw.tween_property(pivot, "scale", Vector3(0.2, 0.2, 0.2), 0.3).set_ease(Tween.EASE_IN)
+	else:
+		pivot.scale = Vector3(0.2, 0.2, 0.2)
+		tw.tween_property(pivot, "scale", Vector3.ONE, 0.25).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.35)
+	tw.chain().tween_callback(pivot.queue_free)
+
+
 static func streak(parent: Node, from: Vector3, to: Vector3, color: Color, width: float, life: float) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:

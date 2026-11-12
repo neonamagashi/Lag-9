@@ -2,7 +2,13 @@ extends Node
 
 var balance: BalanceConfig = preload("res://data/balance.tres")
 var witch: Witch
+var env: Environment
 var kills := 0
+var enemy_time_scale := 1.0
+
+
+func rank_value(arr: Array, rank: int) -> Variant:
+	return arr[clampi(rank, 0, arr.size() - 1)]
 
 
 func hp_for_level(level: int) -> float:
@@ -33,6 +39,5 @@ func witch_max_hp() -> float:
 
 
 func pierce_hits_to_kill(gap: int) -> int:
-	var r := clampi(balance.pierce_rank, 0, balance.pierce_base_damage.size() - 1)
 	var lvl := balance.witch_level + gap
-	return ceili(hp_for_level(lvl) / scaled_damage(balance.pierce_base_damage[r], lvl))
+	return ceili(hp_for_level(lvl) / scaled_damage(rank_value(balance.pierce_base_damage, balance.pierce_rank), lvl))

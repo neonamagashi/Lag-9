@@ -29,6 +29,10 @@ func _ready() -> void:
 	menu = ControlsMenu.new()
 	add_child(menu)
 	spawn_wave()
+	for pos in [Vector3(-20, 2.6, -6), Vector3(18, 0, 18), Vector3(-18, 0, 20), Vector3(14, 2.7, -18.5)]:
+		var bottle := Pickup.new().setup(Pickup.Kind.MANA_BOTTLE, Game.balance.mana_bottle_amount)
+		bottle.position = pos
+		add_child(bottle)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	hud.show_toast("Find Whisky. Esc for controls, F1 for the debug overlay.")
 
@@ -78,6 +82,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F8:
 			Game.balance.pierce_rank = (Game.balance.pierce_rank + 1) % Game.balance.pierce_base_damage.size()
 			hud.show_toast("Pierce rank %d" % (Game.balance.pierce_rank + 1))
+		KEY_F9:
+			witch.reset_cooldowns()
+			hud.show_toast("Cooldowns reset, mana full")
+		KEY_F10:
+			Game.balance.send_rank = (Game.balance.send_rank + 1) % Game.balance.send_range.size()
+			Game.balance.draw_rank = Game.balance.send_rank
+			hud.show_toast("Send/Draw rank %d%s" % [Game.balance.send_rank + 1, " (all directions)" if Game.balance.send_rank >= 1 else ""])
+		KEY_F11:
+			Game.balance.rend_rank = (Game.balance.rend_rank + 1) % Game.balance.rend_targets.size()
+			hud.show_toast("Rend rank %d: %d targets%s" % [Game.balance.rend_rank + 1, Game.balance.rend_targets[Game.balance.rend_rank], ", shards" if Game.balance.rend_rank == Game.balance.rend_targets.size() - 1 else ""])
 
 
 # ---------- world ----------
@@ -98,6 +112,7 @@ func _build_environment() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	Game.env = env
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52, -35, 0)
 	sun.light_color = Color(1.0, 0.94, 0.85)
@@ -139,6 +154,9 @@ func _build_arena() -> void:
 		_pillar(Vector3(cos(a) * r, 0, sin(a) * r), rng.randf_range(3.0, 7.5), pillar_mat)
 	for p in [Vector3(7, 0, -6), Vector3(-6, 0, 12), Vector3(9, 0, 12)]:
 		_pillar(p, 4.5, pillar_mat)
+	_box(Vector3(26, 2.25, 26), Vector3(14, 4.5, 0.6), wall_mat)
+	_box(Vector3(32.7, 2.25, 20), Vector3(0.6, 4.5, 12), wall_mat)
+	_box(Vector3(26, 4.7, 20), Vector3(14, 0.4, 12.6), wall_mat)
 
 
 func _box(pos: Vector3, size: Vector3, material: Material) -> StaticBody3D:

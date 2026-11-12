@@ -14,13 +14,24 @@ func _process(_delta: float) -> void:
 	var w: Witch = Game.witch
 	if frames == 2:
 		w.rig.yaw = 0.5
+		w.field_on = false
+	if frames == 70:
+		Input.action_press("send")
+	if frames == 100:
+		Input.action_release("send")
+	if frames == 104:
+		_save("send")
 	if frames == 140:
-		_save("crush")
+		w.field_on = true
 		w.field_mode = Witch.FieldMode.LIFT
 		w._apply_field_look()
 		main.spawn_wave()
-	if frames == 330:
-		_save("lift")
+		w.mana = 100
+		Input.action_press("singularity")
+	if frames == 143:
+		Input.action_release("singularity")
+	if frames == 152:
+		_save("singularity")
 		get_tree().quit()
 
 

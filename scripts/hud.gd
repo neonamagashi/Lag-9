@@ -11,6 +11,8 @@ const ABILITIES := [
 ]
 
 var _hp_bar: ProgressBar
+var _mana_bar: ProgressBar
+var _mana_text: Label
 var _hp_text: Label
 var _whisky: Label
 var _field: Label
@@ -40,7 +42,7 @@ func _ready() -> void:
 
 	var bottom := VBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	bottom.position = Vector2(28, -150)
+	bottom.position = Vector2(28, -200)
 	bottom.add_theme_constant_override("separation", 6)
 	root.add_child(bottom)
 	_field = _label(24)
@@ -59,6 +61,16 @@ func _ready() -> void:
 	bottom.add_child(_hp_bar)
 	_hp_text = _label(18)
 	bottom.add_child(_hp_text)
+	_mana_bar = ProgressBar.new()
+	_mana_bar.custom_minimum_size = Vector2(320, 14)
+	_mana_bar.show_percentage = false
+	var mfill := StyleBoxFlat.new()
+	mfill.bg_color = Witch.MANA_COLOR
+	_mana_bar.add_theme_stylebox_override("background", bg)
+	_mana_bar.add_theme_stylebox_override("fill", mfill)
+	bottom.add_child(_mana_bar)
+	_mana_text = _label(16)
+	bottom.add_child(_mana_text)
 	_whisky = _label(20)
 	bottom.add_child(_whisky)
 
@@ -123,25 +135,50 @@ func _process(delta: float) -> void:
 	else:
 		_field.text = "FIELD: LIFT  [%s]" % Controls.label("flip_gravity")
 		_field.add_theme_color_override("font_color", Witch.LIFT_COLOR)
-	_whisky.text = "Whisky x%d  [%s]" % [w.whisky, Controls.label("drink_whisky")]
+	_whisky.text = "Whisky x%d  [%s]%s" % [w.whisky, Controls.label("drink_whisky"), "     FLYING" if w.flying else ""]
+	_mana_bar.max_value = Game.balance.max_mana
+	_mana_bar.value = w.mana
+	_mana_text.text = "Mana %d / %d" % [int(w.mana), int(Game.balance.max_mana)]
 	_level.text = "Witch LV %d   ·   %d defeated" % [Game.balance.witch_level, Game.kills]
+	var b := Game.balance
 	for a in ABILITIES:
 		var l: Label = _ability_labels[a[0]]
 		var key := Controls.label(a[0])
-		var cd := 0.0
-		if a[0] == "pierce":
-			cd = w.pierce_cd
-		elif a[0] == "snap":
-			cd = w.snap_cd
-		if a[0] in ["send", "draw", "rend", "singularity"]:
-			l.text = "%s\n[%s]\nsoon" % [a[1], key]
-			l.modulate = Color(1, 1, 1, 0.4)
-		elif cd > 0.05:
-			l.text = "%s\n[%s]\n%.1fs" % [a[1], key, cd]
-			l.modulate = Color(1, 1, 1, 0.6)
-		else:
-			l.text = "%s\n[%s]\nready" % [a[1], key]
-			l.modulate = Color(1, 1, 1, 1)
+		var status := "ready"
+		var dim := false
+		match a[0]:
+			"pierce":
+				dim = w.pierce_cd > 0.05
+				status = "%.1fs" % w.pierce_cd if dim else "ready"
+			"snap":
+				dim = w.snap_cd > 0.05
+				status = "%.1fs" % w.snap_cd if dim else "ready"
+			"send":
+				if w.send_charge >= 0.0:
+					status = "%d%%" % int(w.send_charge / b.send_max_charge * 100.0)
+				else:
+					dim = w.send_cd > 0.05
+					status = "%.1fs" % w.send_cd if dim else "ready"
+			"draw":
+				if w.draw_charge >= 0.0:
+					status = "%d%%" % int(w.draw_charge / b.draw_max_charge * 100.0)
+				else:
+					dim = w.draw_cd > 0.05
+					status = "%.1fs" % w.draw_cd if dim else "ready"
+			"rend":
+				dim = w.rend_cd > 0.05
+				status = "%ds" % ceili(w.rend_cd) if dim else "ready"
+			"singularity":
+				if w.singularity_t > 0.0:
+					status = "ACTIVE %.1fs" % w.singularity_t
+				elif w.singularity_cd > 0.05:
+					dim = true
+					status = "%ds" % ceili(w.singularity_cd)
+				elif w.mana < b.singularity_mana_cost:
+					dim = true
+					status = "%d mana" % int(b.singularity_mana_cost)
+		l.text = "%s\n[%s]\n%s" % [a[1], key, status]
+		l.modulate = Color(1, 1, 1, 0.5 if dim else 1.0)
 
 
 func _label(size: int) -> Label:

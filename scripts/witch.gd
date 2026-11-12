@@ -10,16 +10,26 @@ const MODEL_PATH := "res://models/witch.glb"
 const CRUSH_COLOR := Color(0.62, 0.42, 1.0)
 const LIFT_COLOR := Color(0.36, 0.85, 1.0)
 const GOLD := Color(1.0, 0.78, 0.25)
+const MANA_COLOR := Color(0.35, 0.75, 1.0)
 
 var rig: CameraRig
 var field_on := true
 var field_mode := FieldMode.CRUSH
 var hp := 100.0
+var mana := 0.0
 var whisky := 3
+var flying := false
 var spawn_point := Vector3.ZERO
 
 var pierce_cd := 0.0
 var snap_cd := 0.0
+var send_cd := 0.0
+var draw_cd := 0.0
+var rend_cd := 0.0
+var singularity_cd := 0.0
+var singularity_t := 0.0
+var send_charge := -1.0
+var draw_charge := -1.0
 
 var _model: Node3D
 var _staff: Node3D
@@ -32,17 +42,25 @@ var _field_edge: StandardMaterial3D
 var _field_particles: GPUParticles3D
 var _field_process: ParticleProcessMaterial
 var _field_dot: StandardMaterial3D
+var _field_scale := 1.0
 
 var _coyote := 0.0
 var _jump_buffer := 0.0
-var _double_used := false
-var _charging := 0.0
+var _air_jump_used := false
+var _charging := false
+var _charge_t := 0.0
+var _charge_released := false
+var _last_jump_press := -10.0
 var _snap_time := 0.0
 var _snap_vel := Vector3.ZERO
+var _clamber_t := -1.0
+var _clamber_from := Vector3.ZERO
+var _clamber_to := Vector3.ZERO
 var _invuln := 0.0
 var _face_cam := 0.0
 var _hurt_flash := 0.0
 var _contact_accum := 0.0
+var _ghost_t := 0.0
 var _t := 0.0
 
 
@@ -62,6 +80,7 @@ func _ready() -> void:
 	_build_model()
 	_build_field()
 	spawn_point = global_position
+	mana = Game.balance.start_mana
 	reset_stats()
 
 
@@ -71,16 +90,43 @@ func reset_stats() -> void:
 	hp_changed.emit(hp, Game.witch_max_hp())
 
 
+func reset_cooldowns() -> void:
+	pierce_cd = 0.0
+	snap_cd = 0.0
+	send_cd = 0.0
+	draw_cd = 0.0
+	rend_cd = 0.0
+	singularity_cd = 0.0
+	mana = Game.balance.max_mana
+
+
 func is_invulnerable() -> bool:
 	return _invuln > 0.0
 
 
-func snap_rank() -> int:
-	return clampi(Game.balance.snap_rank, 0, Game.balance.snap_distance.size() - 1)
+func field_radius() -> float:
+	var b := Game.balance
+	if singularity_t > 0.0:
+		return b.field_radius * b.singularity_radius_mult
+	if flying:
+		return b.field_radius * b.flight_field_mult
+	return b.field_radius
 
 
-func pierce_rank() -> int:
-	return clampi(Game.balance.pierce_rank, 0, Game.balance.pierce_base_damage.size() - 1)
+func field_damage_mult() -> float:
+	return Game.balance.singularity_damage_mult if singularity_t > 0.0 else 1.0
+
+
+func lift_height() -> float:
+	return Game.balance.singularity_lift_height if singularity_t > 0.0 else Game.balance.lift_height
+
+
+func field_center() -> Vector3:
+	return global_position + Vector3(0, 0.9, 0)
+
+
+func add_mana(amount: float) -> void:
+	mana = minf(Game.balance.max_mana, mana + amount)
 
 
 # ---------- damage ----------
@@ -103,6 +149,7 @@ func take_damage(amount: float, kind: String) -> void:
 		toast.emit("She went down. Back to the start with a fresh bottle.")
 		global_position = spawn_point
 		velocity = Vector3.ZERO
+		flying = false
 		reset_physics_interpolation()
 		reset_stats()
 
@@ -117,7 +164,7 @@ func drink() -> void:
 	whisky -= 1
 	var heal := Game.witch_max_hp() * Game.balance.whisky_heal_pct
 	hp = minf(Game.witch_max_hp(), hp + heal)
-	Art.popup(get_parent(), global_position + Vector3(0, 2.2, 0), "+%d" % int(heal), Color(1, 0.75, 0.3), 56)
+	Art.popup(get_parent(), global_position + Vector3(0, 2.2, 0), "+%d" % int(heal), GOLD, 56)
 	hp_changed.emit(hp, Game.witch_max_hp())
 
 
@@ -125,59 +172,95 @@ func drink() -> void:
 func _physics_process(delta: float) -> void:
 	var b := Game.balance
 	_t += delta
-	pierce_cd = maxf(0.0, pierce_cd - delta)
-	snap_cd = maxf(0.0, snap_cd - delta)
+	for cd in ["pierce_cd", "snap_cd", "send_cd", "draw_cd", "rend_cd", "singularity_cd"]:
+		set(cd, maxf(0.0, get(cd) - delta))
 	_invuln = maxf(0.0, _invuln - delta)
 	_face_cam = maxf(0.0, _face_cam - delta)
 	_hurt_flash = maxf(0.0, _hurt_flash - delta)
+	if singularity_t > 0.0:
+		singularity_t -= delta
+		if singularity_t <= 0.0:
+			_end_singularity()
 
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var yaw := rig.yaw if rig else 0.0
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, yaw)
 
-	_handle_abilities()
+	_handle_abilities(delta)
 
-	if _snap_time > 0.0:
-		_snap_time -= delta
-		velocity = _snap_vel
-		move_and_slide()
-		if _snap_time <= 0.0:
-			velocity = _snap_vel.normalized() * b.walk_speed
-			velocity.y = 0.0
-		_update_visuals(delta, dir)
-		return
-
-	if Input.is_action_just_pressed("snap") and snap_cd <= 0.0:
+	if _clamber_t >= 0.0:
+		_process_clamber(delta)
+	elif _snap_time > 0.0:
+		_process_snap(delta)
+	elif Input.is_action_just_pressed("snap") and snap_cd <= 0.0:
 		_start_snap(dir)
-		_update_visuals(delta, dir)
-		return
+	elif flying:
+		_process_flight(delta, dir)
+	else:
+		_process_ground(delta, dir)
 
+	if global_position.y < -25.0:
+		global_position = spawn_point
+		velocity = Vector3.ZERO
+		flying = false
+		reset_physics_interpolation()
+
+	_update_visuals(delta, dir)
+
+
+func _process_ground(delta: float, dir: Vector3) -> void:
+	var b := Game.balance
 	var on_floor := is_on_floor()
 	if on_floor:
 		_coyote = b.coyote_time
-		_double_used = false
+		_air_jump_used = false
 	else:
 		_coyote -= delta
-	_jump_buffer = b.jump_buffer if Input.is_action_just_pressed("jump") else _jump_buffer - delta
 
-	if _charging > 0.0:
-		_charging -= delta
-		velocity = velocity.lerp(Vector3.ZERO, minf(1.0, delta * 20.0))
-		if _charging <= 0.0:
-			velocity.y = b.double_jump_velocity
-			Art.burst(get_parent(), global_position + Vector3(0, 0.3, 0), CRUSH_COLOR if field_mode == FieldMode.CRUSH else LIFT_COLOR, 30)
+	var pressed := Input.is_action_just_pressed("jump")
+	if pressed:
+		if not on_floor and _t - _last_jump_press < b.double_tap_window:
+			_last_jump_press = -10.0
+			_charging = false
+			_start_flight()
+			return
+		_last_jump_press = _t
+		_jump_buffer = b.jump_buffer
+	else:
+		_jump_buffer -= delta
+
+	if dir.length() > 0.3 and (pressed or (not on_floor and velocity.y < 3.0)):
+		if _try_clamber(dir):
+			_jump_buffer = 0.0
+			return
+
+	if _charging:
+		_charge_t += delta
+		if Input.is_action_just_released("jump"):
+			_charge_released = true
+		velocity = velocity.lerp(Vector3.ZERO, minf(1.0, delta * 18.0))
+		var full := _charge_t >= b.air_jump_max_charge
+		if full or (_charge_released and _charge_t >= b.air_jump_min_charge):
+			var k := clampf((_charge_t - b.air_jump_min_charge) / (b.air_jump_max_charge - b.air_jump_min_charge), 0.0, 1.0)
+			velocity.y = lerpf(b.air_jump_min_velocity, b.air_jump_max_velocity, k)
+			velocity += dir * b.walk_speed * 0.6
+			_charging = false
+			var c := CRUSH_COLOR if field_mode == FieldMode.CRUSH else LIFT_COLOR
+			Art.burst(get_parent(), global_position + Vector3(0, 0.3, 0), c, int(20 + 30 * k))
+			Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.2, 0), c.lerp(GOLD, k), 1.5 + 2.5 * k, 0.35)
 		move_and_slide()
-		_update_visuals(delta, dir)
 		return
 
 	if _jump_buffer > 0.0 and _coyote > 0.0:
 		velocity.y = b.jump_velocity
 		_jump_buffer = 0.0
 		_coyote = 0.0
-	elif _jump_buffer > 0.0 and not on_floor and not _double_used:
-		_double_used = true
+	elif _jump_buffer > 0.0 and not on_floor and not _air_jump_used:
+		_air_jump_used = true
 		_jump_buffer = 0.0
-		_charging = b.double_jump_charge
+		_charging = true
+		_charge_t = 0.0
+		_charge_released = not Input.is_action_pressed("jump")
 
 	if not on_floor:
 		velocity.y -= b.gravity * delta
@@ -194,66 +277,304 @@ func _physics_process(delta: float) -> void:
 	velocity.z = hv.z
 	move_and_slide()
 
-	if global_position.y < -25.0:
-		global_position = spawn_point
-		velocity = Vector3.ZERO
-		reset_physics_interpolation()
 
-	_update_visuals(delta, dir)
-
-
-func _handle_abilities() -> void:
-	if Input.is_action_just_pressed("flip_gravity"):
-		field_mode = FieldMode.LIFT if field_mode == FieldMode.CRUSH else FieldMode.CRUSH
-		_apply_field_look()
-	if Input.is_action_just_pressed("toggle_field"):
-		field_on = not field_on
-		_field_root.visible = field_on
-		toast.emit("Gravity field %s" % ("on" if field_on else "off"))
-	if Input.is_action_pressed("pierce") and pierce_cd <= 0.0:
-		_pierce()
-	if Input.is_action_just_pressed("drink_whisky"):
-		drink()
-	for a in ["send", "draw", "rend", "singularity"]:
-		if Input.is_action_just_pressed(a):
-			toast.emit("%s arrives in the next milestone" % a.capitalize())
+func _start_flight() -> void:
+	flying = true
+	velocity.y = maxf(velocity.y, 3.0)
+	Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.5, 0), GOLD, 3.0, 0.4)
+	toast.emit("Flying  (double-tap jump to drop)")
 
 
-# ---------- abilities ----------
+func _process_flight(delta: float, dir: Vector3) -> void:
+	var b := Game.balance
+	if Input.is_action_just_pressed("jump"):
+		if _t - _last_jump_press < b.double_tap_window:
+			flying = false
+			_last_jump_press = -10.0
+			return
+		_last_jump_press = _t
+	if b.flight_mana_per_sec > 0.0:
+		mana -= b.flight_mana_per_sec * delta
+		if mana <= 0.0:
+			mana = 0.0
+			flying = false
+			toast.emit("Out of mana")
+			return
+	var vert := 0.0
+	if Input.is_action_pressed("jump"):
+		vert += 1.0
+	if Input.is_action_pressed("descend"):
+		vert -= 1.0
+	var speed := b.flight_sprint_speed if Input.is_action_pressed("sprint") else b.flight_speed
+	var target := dir * speed + Vector3.UP * vert * b.flight_vertical_speed
+	target.y += sin(_t * 2.0) * 0.3
+	velocity = velocity.move_toward(target, b.flight_accel * delta)
+	move_and_slide()
+	if is_on_floor() and vert < 0.0:
+		flying = false
+
+
+func _try_clamber(dir: Vector3) -> bool:
+	var b := Game.balance
+	var space := get_world_3d().direct_space_state
+	var fwd := Vector3(dir.x, 0, dir.z).normalized()
+	var chest := global_position + Vector3(0, 0.9, 0)
+	var q := PhysicsRayQueryParameters3D.create(chest, chest + fwd * b.clamber_reach, 1)
+	q.exclude = [get_rid()]
+	var wall := space.intersect_ray(q)
+	if wall.is_empty():
+		var shin := global_position + Vector3(0, 0.3, 0)
+		q = PhysicsRayQueryParameters3D.create(shin, shin + fwd * b.clamber_reach, 1)
+		q.exclude = [get_rid()]
+		wall = space.intersect_ray(q)
+		if wall.is_empty():
+			return false
+	if absf(wall.normal.y) > 0.5:
+		return false
+	var probe_xz: Vector3 = wall.position + fwd * 0.45
+	var top := Vector3(probe_xz.x, global_position.y + b.clamber_max_height + 0.1, probe_xz.z)
+	var bottom := Vector3(probe_xz.x, global_position.y + 0.45, probe_xz.z)
+	q = PhysicsRayQueryParameters3D.create(top, bottom, 1)
+	q.exclude = [get_rid()]
+	var ledge := space.intersect_ray(q)
+	if ledge.is_empty() or ledge.normal.y < 0.7:
+		return false
+	var land: Vector3 = ledge.position + Vector3(0, 0.05, 0)
+	q = PhysicsRayQueryParameters3D.create(land + Vector3(0, 0.1, 0), land + Vector3(0, 1.9, 0), 1)
+	q.exclude = [get_rid()]
+	if not space.intersect_ray(q).is_empty():
+		return false
+	_clamber_from = global_position
+	_clamber_to = land
+	_clamber_t = 0.0
+	_charging = false
+	velocity = Vector3.ZERO
+	return true
+
+
+func _process_clamber(delta: float) -> void:
+	var b := Game.balance
+	_clamber_t += delta / b.clamber_time
+	var k := clampf(_clamber_t, 0.0, 1.0)
+	var rise := clampf(k / 0.6, 0.0, 1.0)
+	var push := clampf((k - 0.45) / 0.55, 0.0, 1.0)
+	var y := lerpf(_clamber_from.y, _clamber_to.y, ease(rise, 0.5))
+	var xz := Vector2(_clamber_from.x, _clamber_from.z).lerp(Vector2(_clamber_to.x, _clamber_to.z), ease(push, 0.6))
+	global_position = Vector3(xz.x, y, xz.y)
+	if _clamber_t >= 1.0:
+		_clamber_t = -1.0
+		var fwd := (_clamber_to - _clamber_from) * Vector3(1, 0, 1)
+		velocity = fwd.normalized() * Game.balance.walk_speed * 0.5 if fwd.length() > 0.01 else Vector3.ZERO
+
+
 func _start_snap(dir: Vector3) -> void:
 	var b := Game.balance
-	var r := snap_rank()
-	var d := dir.normalized() if dir.length() > 0.1 else _model.global_basis.z.normalized()
+	var r := b.snap_rank
+	var d := dir if dir.length() > 0.1 else _model.global_basis.z
 	d.y = 0.0
 	d = d.normalized()
-	var dur: float = b.snap_duration[r]
-	var dist: float = b.snap_distance[r]
+	var dur: float = Game.rank_value(b.snap_duration, r)
+	var dist: float = Game.rank_value(b.snap_distance, r)
 	_snap_vel = d * (dist / dur)
 	_snap_time = dur
 	_invuln = dur + b.snap_iframe_padding
 	snap_cd = b.snap_cooldown
+	_charging = false
 	var from := global_position + Vector3(0, 1.0, 0)
-	var width := 0.9 - r * 0.38
+	var width := 0.9 - clampi(r, 0, 2) * 0.38
 	Art.streak(get_parent(), from, from + d * dist, CRUSH_COLOR.lerp(GOLD, 0.35), width, 0.25 + r * 0.05)
+	Art.ghost(_model, get_parent(), GOLD, 0.5, 0.3)
+
+
+func _process_snap(delta: float) -> void:
+	_snap_time -= delta
+	velocity = _snap_vel
+	move_and_slide()
+	if _snap_time <= 0.0:
+		velocity = _snap_vel.normalized() * Game.balance.sprint_speed
+		velocity.y = 0.0
+		Art.ghost(_model, get_parent(), GOLD, 0.35, 0.25)
+
+
+# ---------- abilities ----------
+func _handle_abilities(delta: float) -> void:
+	var b := Game.balance
+	if Input.is_action_just_pressed("flip_gravity"):
+		field_mode = FieldMode.LIFT if field_mode == FieldMode.CRUSH else FieldMode.CRUSH
+		_apply_field_look()
+	if Input.is_action_just_pressed("toggle_field"):
+		if singularity_t > 0.0:
+			toast.emit("Can't drop the field during Singularity")
+		else:
+			field_on = not field_on
+			toast.emit("Gravity field %s" % ("on" if field_on else "off"))
+	if Input.is_action_pressed("pierce") and pierce_cd <= 0.0:
+		_pierce()
+	if Input.is_action_just_pressed("drink_whisky"):
+		drink()
+
+	if Input.is_action_just_pressed("send") and send_cd <= 0.0:
+		send_charge = 0.0
+	if send_charge >= 0.0:
+		send_charge = minf(b.send_max_charge, send_charge + delta)
+		if Input.is_action_just_released("send") or not Input.is_action_pressed("send"):
+			_fire_push(true, send_charge / b.send_max_charge)
+			send_charge = -1.0
+
+	if Input.is_action_just_pressed("draw") and draw_cd <= 0.0:
+		draw_charge = 0.0
+	if draw_charge >= 0.0:
+		draw_charge = minf(b.draw_max_charge, draw_charge + delta)
+		if Input.is_action_just_released("draw") or not Input.is_action_pressed("draw"):
+			_fire_push(false, draw_charge / b.draw_max_charge)
+			draw_charge = -1.0
+
+	if Input.is_action_just_pressed("rend"):
+		if rend_cd > 0.0:
+			toast.emit("Rend ready in %ds" % ceili(rend_cd))
+		else:
+			_rend()
+
+	if Input.is_action_just_pressed("singularity"):
+		if singularity_t > 0.0:
+			pass
+		elif singularity_cd > 0.0:
+			toast.emit("Singularity ready in %ds" % ceili(singularity_cd))
+		elif mana < b.singularity_mana_cost:
+			toast.emit("Singularity needs %d mana" % int(b.singularity_mana_cost))
+		else:
+			_start_singularity()
+
+
+func _aim_flat() -> Vector3:
+	var f := rig.forward() if rig else -global_basis.z
+	f.y = 0.0
+	return f.normalized()
+
+
+func _fire_push(outward: bool, charge: float) -> void:
+	var b := Game.balance
+	var rank: int = b.send_rank if outward else b.draw_rank
+	var reach: float = Game.rank_value(b.send_range if outward else b.draw_range, rank)
+	var fmax: float = Game.rank_value(b.send_force_max if outward else b.draw_force_max, rank)
+	var fmin: float = b.send_force_min if outward else b.draw_force_min
+	var half := deg_to_rad((b.send_cone_deg if outward else b.draw_cone_deg) * 0.5)
+	var all_dirs := rank >= 1
+	var force := lerpf(fmin, fmax, charge)
+	var stagger := charge < 0.15
+	var aim := _aim_flat()
+	_face_cam = 0.5
+	if outward:
+		send_cd = b.send_cooldown
+	else:
+		draw_cd = b.draw_cooldown
+	var color := Color(1.0, 0.65, 0.35) if outward else Color(0.5, 0.85, 1.0)
+	var origin := global_position + Vector3(0, 1.0, 0)
+	if all_dirs:
+		Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.6, 0), color, reach if outward else reach * 0.6, 0.35)
+	else:
+		Art.cone_flash(get_parent(), origin, aim, reach, half, color, not outward)
+	var hit := 0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not (e is Enemy) or e.is_dead():
+			continue
+		var to: Vector3 = e.global_position - global_position
+		to.y = 0.0
+		var d := to.length()
+		if d > reach or d < 0.01:
+			continue
+		if not all_dirs and to.normalized().angle_to(aim) > half:
+			continue
+		var falloff := 1.0 - (d / reach) * 0.4
+		var push_dir := to.normalized() if outward else -to.normalized()
+		var f := force * falloff
+		if not outward:
+			f = minf(f, d * 3.2 + 4.0)
+		e.knock(push_dir * f, b.stagger_time if stagger else 0.25)
+		if outward:
+			e.take_damage(Game.scaled_damage(b.send_base_damage, e.level) * (0.5 + 0.5 * charge), "send")
+		hit += 1
+	if stagger and hit > 0:
+		toast.emit("Stagger")
+
+
+func _rend() -> void:
+	var b := Game.balance
+	var count: int = Game.rank_value(b.rend_targets, b.rend_rank)
+	var shards := b.rend_rank >= b.rend_targets.size() - 1
+	var targets: Array[Enemy] = []
+	var aimed := _aimed_enemy(b.rend_range)
+	if aimed:
+		targets.append(aimed)
+	var aim_point := aimed.global_position if aimed else global_position + _aim_flat() * 8.0
+	var pool: Array = get_tree().get_nodes_in_group("enemies").filter(func(e): return e is Enemy and not e.is_dead() and not targets.has(e) and e.global_position.distance_to(global_position) <= b.rend_range)
+	pool.sort_custom(func(a, c): return a.global_position.distance_to(aim_point) < c.global_position.distance_to(aim_point))
+	for e in pool:
+		if targets.size() >= count:
+			break
+		targets.append(e)
+	if targets.is_empty():
+		toast.emit("No target in range")
+		return
+	rend_cd = b.rend_cooldown
+	_face_cam = 0.6
+	for e in targets:
+		e.rend_start(b.rend_hold_time, field_mode == FieldMode.LIFT, shards)
+		Art.streak(get_parent(), _staff_tip.global_position, e.global_position + Vector3(0, 0.6, 0), Color(0.75, 0.4, 1.0), 0.08, b.rend_hold_time)
+
+
+func _start_singularity() -> void:
+	var b := Game.balance
+	mana -= b.singularity_mana_cost
+	singularity_t = b.singularity_duration
+	singularity_cd = b.singularity_cooldown
+	field_on = true
+	Game.enemy_time_scale = b.singularity_time_scale
+	if Game.env:
+		Game.env.adjustment_enabled = true
+		Game.env.adjustment_saturation = 0.35
+		Game.env.adjustment_contrast = 1.15
+	Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.8, 0), Color(0.1, 0.0, 0.2), b.field_radius * b.singularity_radius_mult, 0.6)
+	Art.burst(get_parent(), global_position + Vector3(0, 1, 0), Color(0.8, 0.6, 1.0), 60)
+	toast.emit("SINGULARITY")
+
+
+func _end_singularity() -> void:
+	singularity_t = 0.0
+	Game.enemy_time_scale = 1.0
+	if Game.env:
+		Game.env.adjustment_enabled = false
+
+
+func _aimed_enemy(reach: float) -> Enemy:
+	var cam := rig.camera
+	var center := get_viewport().get_visible_rect().size * 0.5
+	var origin := cam.project_ray_origin(center)
+	var ray_dir := cam.project_ray_normal(center)
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + ray_dir * (reach + rig.arm.spring_length), 1 | 4)
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit and hit.collider is Enemy:
+		return hit.collider
+	return null
 
 
 func _pierce() -> void:
 	var b := Game.balance
-	var r := pierce_rank()
 	pierce_cd = b.pierce_cooldown
 	_face_cam = 0.6
 	var cam := rig.camera
 	var center := get_viewport().get_visible_rect().size * 0.5
 	var origin := cam.project_ray_origin(center)
 	var ray_dir := cam.project_ray_normal(center)
-	var reach: float = b.pierce_range[r] + rig.arm.spring_length
+	var reach: float = Game.rank_value(b.pierce_range, b.pierce_rank) + rig.arm.spring_length
 	var q := PhysicsRayQueryParameters3D.create(origin, origin + ray_dir * reach, 1 | 4)
 	q.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	var end: Vector3 = hit.position if hit else origin + ray_dir * reach
 	if hit and hit.collider is Enemy:
 		var e: Enemy = hit.collider
-		e.take_damage(Game.scaled_damage(b.pierce_base_damage[r], e.level), "pierce")
+		e.take_damage(Game.scaled_damage(Game.rank_value(b.pierce_base_damage, b.pierce_rank), e.level), "pierce")
 	Art.streak(get_parent(), _staff_tip.global_position, end, Color(0.85, 0.7, 1.0), 0.06, 0.12)
 
 
@@ -263,25 +584,47 @@ func _update_visuals(delta: float, dir: Vector3) -> void:
 	var bob := sin(_t * 2.2) * 0.12
 	_model.position.y = b.hover_height + bob
 	var face := _model.rotation.y
-	if _face_cam > 0.0:
+	if _face_cam > 0.0 or send_charge >= 0.0 or draw_charge >= 0.0:
 		var f := rig.forward()
 		face = atan2(f.x, f.z)
+	elif _clamber_t >= 0.0:
+		var c := _clamber_to - _clamber_from
+		face = atan2(c.x, c.z)
 	elif dir.length() > 0.05:
 		face = atan2(dir.x, dir.z)
 	_model.rotation.y = lerp_angle(_model.rotation.y, face, minf(1.0, delta * b.turn_speed))
-	var lean := 0.12 if Vector3(velocity.x, 0, velocity.z).length() > 1.0 else 0.0
+	var hspeed := Vector3(velocity.x, 0, velocity.z).length()
+	var lean := clampf(hspeed / b.sprint_speed, 0.0, 1.0) * (0.3 if flying else 0.18)
 	_model.rotation.x = lerpf(_model.rotation.x, lean, minf(1.0, delta * 8.0))
 	_staff.position.y = 1.35 + sin(_t * 1.6 + 1.0) * 0.1
 	_staff.rotation.z = sin(_t * 1.1) * 0.06
 	var flicker := 0.3 + (sin(_t * 9.0) * 0.5 + 0.5) * 0.25 * randf_range(0.8, 1.2)
-	if _snap_time > 0.0:
+	if _snap_time > 0.0 or singularity_t > 0.0:
 		flicker = 0.9
+	elif _charging:
+		flicker = 0.4 + 0.5 * clampf(_charge_t / b.air_jump_max_charge, 0.0, 1.0)
 	for m in _aura_mats:
 		m.albedo_color = Color(1.0, 0.25, 0.2, 0.8) if _hurt_flash > 0.0 else Color(GOLD, flicker)
-	_model.visible = not (_snap_time > 0.0 and snap_rank() == 2)
-	_field_spinner.rotation.y += delta * (0.8 if field_mode == FieldMode.CRUSH else -0.8)
+	_model.visible = not (_snap_time > 0.0 and b.snap_rank >= 2)
+
+	var sprinting := Input.is_action_pressed("sprint") and hspeed > b.walk_speed * 1.05
+	_ghost_t -= delta
+	if (sprinting or (flying and hspeed > b.flight_speed * 0.9)) and _ghost_t <= 0.0:
+		_ghost_t = 0.08
+		Art.ghost(_model, get_parent(), GOLD, 0.16, 0.22)
+	if rig:
+		var fov_goal := b.sprint_fov if (sprinting or _snap_time > 0.0 or (flying and hspeed > b.flight_speed)) else b.base_fov
+		rig.camera.fov = lerpf(rig.camera.fov, fov_goal, minf(1.0, delta * 6.0))
+
+	_field_root.visible = field_on
+	var goal := field_radius() / b.field_radius
+	_field_scale = lerpf(_field_scale, goal, minf(1.0, delta * 10.0))
+	_field_root.scale = Vector3(_field_scale, 1.0, _field_scale)
+	_field_root.position.y = 0.04 if not flying else 0.3
+	_field_spinner.rotation.y += delta * (0.8 if field_mode == FieldMode.CRUSH else -0.8) * (3.0 if singularity_t > 0.0 else 1.0)
 	var pulse := 1.0 + sin(_t * 3.0) * 0.02
 	_field_spinner.scale = Vector3(pulse, 1, pulse)
+	_field_fill.albedo_color.a = 0.13 if singularity_t > 0.0 else 0.1
 
 
 func _apply_field_look() -> void:
@@ -289,14 +632,12 @@ func _apply_field_look() -> void:
 	_field_fill.albedo_color = Color(c, 0.1)
 	_field_edge.albedo_color = Color(c, 0.75)
 	_field_dot.albedo_color = Color(c, 0.9)
-	var r := Game.balance.field_radius
 	if field_mode == FieldMode.CRUSH:
 		_field_process.gravity = Vector3(0, -9, 0)
 		_field_process.emission_shape_offset = Vector3(0, 3.5, 0)
 	else:
 		_field_process.gravity = Vector3(0, 5, 0)
 		_field_process.emission_shape_offset = Vector3(0, 0.1, 0)
-	_field_process.emission_ring_radius = r
 	toast.emit("Gravity: %s" % ("Crush" if field_mode == FieldMode.CRUSH else "Lift"))
 
 
@@ -432,7 +773,6 @@ func _build_field() -> void:
 	_field_root.position.y = 0.04
 	add_child(_field_root)
 	_field_fill = Art.glow(CRUSH_COLOR, 0.1)
-	_field_fill.no_depth_test = false
 	var disc := CylinderMesh.new()
 	disc.top_radius = r
 	disc.bottom_radius = r
