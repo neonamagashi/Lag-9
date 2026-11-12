@@ -125,6 +125,16 @@ extends Resource
 @export var clamber_reach: float = 0.9
 @export var clamber_time: float = 0.24
 
+@export_group("Hair & Hat")
+@export var sway_lift_bias: float = 1.0
+@export var sway_crush_bias: float = 0.35
+@export var sway_idle_bias: float = 0.15
+@export var sway_inertia: float = 0.035
+@export var sway_stiffness: float = 60.0
+@export var sway_damping: float = 7.0
+@export var hat_sway_amount: float = 0.14
+@export var hair_sway_amount: float = 0.07
+
 @export_group("Enemies")
 @export var enemy_speed: float = 3.4
 @export var enemy_attack_range: float = 1.7

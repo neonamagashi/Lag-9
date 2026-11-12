@@ -7,6 +7,8 @@ signal toast(text: String)
 enum FieldMode { CRUSH, LIFT }
 
 const MODEL_PATH := "res://models/witch.glb"
+const BODY_SHADER := preload("res://shaders/witch_body.gdshader")
+const AURA_SHADER := preload("res://shaders/witch_aura.gdshader")
 const CRUSH_COLOR := Color(0.62, 0.42, 1.0)
 const LIFT_COLOR := Color(0.36, 0.85, 1.0)
 const GOLD := Color(1.0, 0.78, 0.25)
@@ -35,6 +37,11 @@ var _model: Node3D
 var _staff: Node3D
 var _staff_tip: Node3D
 var _aura_mats: Array[StandardMaterial3D] = []
+var _body_mats: Array[ShaderMaterial] = []
+var _aura_shader_mats: Array[ShaderMaterial] = []
+var _sway := Vector3.ZERO
+var _sway_vel := Vector3.ZERO
+var _prev_vel := Vector3.ZERO
 var _field_root: Node3D
 var _field_spinner: Node3D
 var _field_fill: StandardMaterial3D
@@ -597,14 +604,19 @@ func _update_visuals(delta: float, dir: Vector3) -> void:
 	var lean := clampf(hspeed / b.sprint_speed, 0.0, 1.0) * (0.3 if flying else 0.18)
 	_model.rotation.x = lerpf(_model.rotation.x, lean, minf(1.0, delta * 8.0))
 	_staff.position.y = 1.35 + sin(_t * 1.6 + 1.0) * 0.1
-	_staff.rotation.z = sin(_t * 1.1) * 0.06
+	_staff.rotation.z = -0.18 + sin(_t * 1.1) * 0.06
 	var flicker := 0.3 + (sin(_t * 9.0) * 0.5 + 0.5) * 0.25 * randf_range(0.8, 1.2)
 	if _snap_time > 0.0 or singularity_t > 0.0:
 		flicker = 0.9
 	elif _charging:
 		flicker = 0.4 + 0.5 * clampf(_charge_t / b.air_jump_max_charge, 0.0, 1.0)
+	var aura_c := Color(1.0, 0.25, 0.2, 0.8) if _hurt_flash > 0.0 else Color(GOLD, flicker)
 	for m in _aura_mats:
-		m.albedo_color = Color(1.0, 0.25, 0.2, 0.8) if _hurt_flash > 0.0 else Color(GOLD, flicker)
+		m.albedo_color = aura_c
+	for m in _aura_shader_mats:
+		m.set_shader_parameter("aura_color", Color(aura_c, aura_c.a * 0.8))
+	if not _body_mats.is_empty():
+		_update_sway(delta)
 	_model.visible = not (_snap_time > 0.0 and b.snap_rank >= 2)
 
 	var sprinting := Input.is_action_pressed("sprint") and hspeed > b.walk_speed * 1.05
@@ -646,11 +658,13 @@ func _build_model() -> void:
 	add_child(_model)
 	if ResourceLoader.exists(MODEL_PATH):
 		var scene: PackedScene = load(MODEL_PATH)
-		_model.add_child(scene.instantiate())
+		var inst := scene.instantiate()
+		_model.add_child(inst)
+		_apply_model_shaders(inst)
 	else:
 		_build_placeholder()
 	_staff = Node3D.new()
-	_staff.position = Vector3(0.45, 1.35, -0.75)
+	_staff.position = Vector3(0.75, 1.35, -0.35)
 	_model.add_child(_staff)
 	var wood := Art.mat(Color(0.42, 0.27, 0.15))
 	var gold := Art.mat(GOLD, Color(0.25, 0.15, 0.0))
@@ -692,13 +706,52 @@ func _build_model() -> void:
 	proc.gravity = Vector3.ZERO
 	gp.process_material = proc
 	var dot := QuadMesh.new()
-	dot.size = Vector2(0.06, 0.06)
+	dot.size = Vector2(0.035, 0.035)
 	gp.draw_pass_1 = dot
 	gp.material_override = Art.glow(GOLD, 1.0, true)
 	gp.amount = 60
 	gp.lifetime = 1.8
 	gp.position.y = 0.1
 	_model.add_child(gp)
+
+
+func _apply_model_shaders(root: Node) -> void:
+	for node in root.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node
+		for i in mi.mesh.get_surface_count():
+			var src := mi.get_active_material(i) as BaseMaterial3D
+			var body := ShaderMaterial.new()
+			body.shader = BODY_SHADER
+			if src and src.albedo_texture:
+				body.set_shader_parameter("albedo_tex", src.albedo_texture)
+			var aura := ShaderMaterial.new()
+			aura.shader = AURA_SHADER
+			body.next_pass = aura
+			mi.set_surface_override_material(i, body)
+			_body_mats.append(body)
+			_aura_shader_mats.append(aura)
+
+
+func _update_sway(delta: float) -> void:
+	var b := Game.balance
+	var accel := (velocity - _prev_vel) / maxf(delta, 0.0001)
+	_prev_vel = velocity
+	var bias := Vector3.DOWN * b.sway_idle_bias
+	if field_on:
+		bias = Vector3.UP * b.sway_lift_bias if field_mode == FieldMode.LIFT else Vector3.DOWN * b.sway_crush_bias
+	var target := bias - (accel * b.sway_inertia).limit_length(1.5)
+	_sway_vel += (target - _sway) * b.sway_stiffness * delta
+	_sway_vel *= exp(-b.sway_damping * delta)
+	_sway += _sway_vel * delta
+	var local := _model.global_basis.orthonormalized().inverse() * _sway
+	for m in _body_mats:
+		m.set_shader_parameter("sway", local)
+		m.set_shader_parameter("hat_amount", b.hat_sway_amount)
+		m.set_shader_parameter("hair_amount", b.hair_sway_amount)
+	for m in _aura_shader_mats:
+		m.set_shader_parameter("sway", local)
+		m.set_shader_parameter("hat_amount", b.hat_sway_amount)
+		m.set_shader_parameter("hair_amount", b.hair_sway_amount)
 
 
 func _add_aura(material: StandardMaterial3D) -> StandardMaterial3D:
