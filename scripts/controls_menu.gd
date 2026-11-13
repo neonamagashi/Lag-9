@@ -5,6 +5,8 @@ var _buttons := {}
 var _listening := ""
 var _sens: HSlider
 var _sens_label: Label
+var _vol: HSlider
+var _vol_label: Label
 
 
 func _ready() -> void:
@@ -70,6 +72,18 @@ func _ready() -> void:
 	_sens.value_changed.connect(_on_sens)
 	sens_row.add_child(_sens)
 	col.add_child(sens_row)
+	var vol_row := HBoxContainer.new()
+	_vol_label = Label.new()
+	_vol_label.custom_minimum_size = Vector2(220, 0)
+	vol_row.add_child(_vol_label)
+	_vol = HSlider.new()
+	_vol.min_value = 0.0
+	_vol.max_value = 1.0
+	_vol.step = 0.05
+	_vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vol.value_changed.connect(_on_vol)
+	vol_row.add_child(_vol)
+	col.add_child(vol_row)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	var reset := Button.new()
@@ -106,11 +120,20 @@ func _refresh() -> void:
 		_buttons[a].text = Controls.label(a)
 	_sens.set_value_no_signal(Controls.sensitivity)
 	_sens_label.text = "Mouse sensitivity  %.4f" % Controls.sensitivity
+	_vol.set_value_no_signal(Controls.volume)
+	_vol_label.text = "Volume  %d%%" % int(Controls.volume * 100)
 
 
 func _listen(action: String) -> void:
 	_listening = action
 	_buttons[action].text = "Press a key or button…"
+
+
+func _on_vol(v: float) -> void:
+	Controls.volume = v
+	Controls.apply_volume()
+	_vol_label.text = "Volume  %d%%" % int(v * 100)
+	Sfx.play("ui_click")
 
 
 func _on_sens(v: float) -> void:

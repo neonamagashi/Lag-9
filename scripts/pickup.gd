@@ -78,11 +78,13 @@ func _physics_process(delta: float) -> void:
 func _collect(w: Witch) -> void:
 	if kind == Kind.WHISKY:
 		w.whisky += 1
+		Sfx.play("whisky", global_position)
 		Art.popup(get_parent(), global_position + Vector3(0, 1, 0), "+1 Whisky", COLORS[kind], 44)
 	else:
 		if w.mana >= Game.balance.max_mana and kind == Kind.MANA_BOTTLE:
 			return
 		w.add_mana(amount)
+		Sfx.play("mana_pickup", global_position, 0.05)
 		Art.popup(get_parent(), global_position + Vector3(0, 1, 0), "+%d mana" % int(amount), COLORS[kind], 44)
 	if kind == Kind.MANA_BOTTLE:
 		_body.visible = false

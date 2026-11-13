@@ -89,6 +89,7 @@ var _face_cam := 0.0
 var _hurt_flash := 0.0
 var _contact_accum := 0.0
 var _ghost_t := 0.0
+var _charge_sound: AudioStreamPlayer
 var _t := 0.0
 
 
@@ -162,6 +163,7 @@ func take_damage(amount: float, kind: String) -> void:
 	if _invuln > 0.0:
 		if kind != "contact":
 			Art.popup(get_parent(), global_position + Vector3(0, 2.2, 0), "DODGED", GOLD, 48)
+			Sfx.play("dodge", global_position)
 		return
 	hp -= amount
 	if kind == "contact":
@@ -171,6 +173,7 @@ func take_damage(amount: float, kind: String) -> void:
 			_contact_accum = 0.0
 	else:
 		_hurt_flash = 0.15
+		Sfx.play("witch_hurt", global_position, 0.1)
 		Art.popup(get_parent(), global_position + Vector3(0, 2.0, 0), str(int(amount)), Color(1, 0.35, 0.3), 56)
 	hp_changed.emit(hp, Game.witch_max_hp())
 	if hp <= 0.0:
@@ -190,6 +193,7 @@ func drink() -> void:
 		toast.emit("Already at full health")
 		return
 	whisky -= 1
+	Sfx.play("whisky", global_position)
 	var heal := Game.witch_max_hp() * Game.balance.whisky_heal_pct
 	hp = minf(Game.witch_max_hp(), hp + heal)
 	Art.popup(get_parent(), global_position + Vector3(0, 2.2, 0), "+%d" % int(heal), GOLD, 56)
@@ -250,6 +254,7 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 		if not on_floor and _t - _last_jump_press < b.double_tap_window:
 			_last_jump_press = -10.0
 			_charging = false
+			_stop_charge_sound()
 			_start_flight()
 			return
 		_last_jump_press = _t
@@ -273,6 +278,8 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 			velocity.y = lerpf(b.air_jump_min_velocity, b.air_jump_max_velocity, k)
 			velocity += dir * b.walk_speed * 0.6
 			_charging = false
+			_stop_charge_sound()
+			Sfx.play("jump_release", global_position, 0.05, -2.0 + 4.0 * k)
 			var c := CRUSH_COLOR if field_mode == FieldMode.CRUSH else LIFT_COLOR
 			Art.burst(get_parent(), global_position + Vector3(0, 0.3, 0), c, int(20 + 30 * k))
 			Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.2, 0), c.lerp(GOLD, k), 1.5 + 2.5 * k, 0.35)
@@ -280,6 +287,7 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 		return
 
 	if _jump_buffer > 0.0 and _coyote > 0.0:
+		Sfx.play("whiff", global_position, 0.1, -8.0)
 		velocity.y = b.jump_velocity
 		_jump_buffer = 0.0
 		_coyote = 0.0
@@ -288,6 +296,7 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 		_jump_buffer = 0.0
 		_charging = true
 		_charge_t = 0.0
+		_charge_sound = Sfx.play_held("jump_charge", -6.0)
 		_charge_released = not Input.is_action_pressed("jump")
 
 	if not on_floor:
@@ -306,7 +315,14 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 	move_and_slide()
 
 
+func _stop_charge_sound() -> void:
+	if _charge_sound and _charge_sound.stream and _charge_sound.stream.resource_path.ends_with("jump_charge.wav"):
+		_charge_sound.stop()
+	_charge_sound = null
+
+
 func _start_flight() -> void:
+	Sfx.play("flight_on", global_position)
 	flying = true
 	velocity.y = maxf(velocity.y, 3.0)
 	Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.5, 0), GOLD, 3.0, 0.4)
@@ -319,6 +335,7 @@ func _process_flight(delta: float, dir: Vector3) -> void:
 		if _t - _last_jump_press < b.double_tap_window:
 			flying = false
 			_last_jump_press = -10.0
+			Sfx.play("whiff", global_position)
 			return
 		_last_jump_press = _t
 	if b.flight_mana_per_sec > 0.0:
@@ -376,6 +393,8 @@ func _try_clamber(dir: Vector3) -> bool:
 	_clamber_to = land
 	_clamber_t = 0.0
 	_charging = false
+	_stop_charge_sound()
+	Sfx.play("whiff", global_position, 0.1, -4.0)
 	velocity = Vector3.ZERO
 	return true
 
@@ -408,6 +427,8 @@ func _start_snap(dir: Vector3) -> void:
 	_invuln = dur + b.snap_iframe_padding
 	snap_cd = b.snap_cooldown
 	_charging = false
+	_stop_charge_sound()
+	Sfx.play("snap", global_position, 0.06)
 	var from := global_position + Vector3(0, 1.0, 0)
 	var width := 0.9 - clampi(r, 0, 2) * 0.38
 	Art.streak(get_parent(), from, from + d * dist, CRUSH_COLOR.lerp(GOLD, 0.35), width, 0.25 + r * 0.05)
@@ -429,12 +450,14 @@ func _handle_abilities(delta: float) -> void:
 	var b := Game.balance
 	if Input.is_action_just_pressed("flip_gravity"):
 		field_mode = FieldMode.LIFT if field_mode == FieldMode.CRUSH else FieldMode.CRUSH
+		Sfx.play("flip_crush" if field_mode == FieldMode.CRUSH else "flip_lift", global_position, 0.03)
 		_apply_field_look()
 	if Input.is_action_just_pressed("toggle_field"):
 		if singularity_t > 0.0:
 			toast.emit("Can't drop the field during Singularity")
 		else:
 			field_on = not field_on
+			Sfx.play("flip_crush" if field_on else "whiff", global_position, 0.03, -3.0)
 			toast.emit("Gravity field %s" % ("on" if field_on else "off"))
 	if Input.is_action_pressed("pierce") and pierce_cd <= 0.0:
 		_pierce()
@@ -497,6 +520,7 @@ func _fire_push(outward: bool, charge: float) -> void:
 	else:
 		draw_cd = b.draw_cooldown
 	var color := Color(1.0, 0.65, 0.35) if outward else Color(0.5, 0.85, 1.0)
+	Sfx.play("send" if outward else "draw", global_position, 0.05, -4.0 + 4.0 * charge)
 	var origin := global_position + Vector3(0, 1.0, 0)
 	if all_dirs:
 		Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.6, 0), color, reach if outward else reach * 0.6, 0.35)
@@ -546,6 +570,7 @@ func _rend() -> void:
 		return
 	rend_cd = b.rend_cooldown
 	_face_cam = 0.6
+	Sfx.play("rend", global_position, 0.05)
 	for e in targets:
 		e.rend_start(b.rend_hold_time, field_mode == FieldMode.LIFT, shards)
 		Art.streak(get_parent(), _staff_tip.global_position, e.global_position + Vector3(0, 0.6, 0), Color(0.75, 0.4, 1.0), 0.08, b.rend_hold_time)
@@ -557,6 +582,7 @@ func _start_singularity() -> void:
 	singularity_t = b.singularity_duration
 	singularity_cd = b.singularity_cooldown
 	field_on = true
+	Sfx.play("singularity", global_position, 0.0, 2.0)
 	Game.enemy_time_scale = b.singularity_time_scale
 	if Game.env:
 		Game.env.adjustment_enabled = true
@@ -604,6 +630,7 @@ func _pierce() -> void:
 		var e: Enemy = hit.collider
 		e.take_damage(Game.scaled_damage(Game.rank_value(b.pierce_base_damage, b.pierce_rank), e.level), "pierce")
 	Art.streak(get_parent(), _staff_tip.global_position, end, Color(0.85, 0.7, 1.0), 0.06, 0.12)
+	Sfx.play("pierce", _staff_tip.global_position, 0.1, -5.0)
 
 
 # ---------- visuals ----------

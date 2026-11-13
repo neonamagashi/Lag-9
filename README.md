@@ -47,3 +47,11 @@ The staff floats diagonally across her back and grows from 1 m to 3 m as abiliti
 
 ## Tests
 `tests/sim_test.tscn` checks the charged jump, flight, clamber, Send, Draw, Rend and Singularity, and `tests/collision_test.tscn` checks knockback damage. Both print their results. Run it from the editor, or headless with `godot --headless --path . res://tests/sim_test.tscn`.
+
+## Audio
+`audio/sfx` holds placeholder sound effects and `audio/ambient` a looping Limbo drone. All of them were synthesized by `tools/synth_sfx.py` (run `python3 tools/synth_sfx.py audio/sfx`), so there are no licensing strings attached. Replace any file with a real recording of the same name and the game picks it up automatically. Master volume is in the Esc menu.
+
+Code plays sounds by name, for example `Sfx.play("pierce", position)`. Sounds currently hooked up: pierce, snap, whiff, jump_charge, jump_release, flight_on, flip_crush, flip_lift, send, draw, rend, singularity, dodge, witch_hurt, whisky, mana_pickup, enemy_hit, enemy_attack, impact, crush_kill, ui_click.
+
+## Environment assets
+`assets/environment/Ultimate Stylized Nature Pack` (Quaternius, CC0). Only the glTF version is kept. Add new packs the same way: one format plus the license file.

@@ -140,6 +140,10 @@ func take_damage(amount: float, kind: String) -> void:
 		elif kind == "rend":
 			c = Color(1.0, 0.45, 0.9)
 		Art.popup(get_parent(), global_position + Vector3(0, 1.4, 0), str(int(amount)), c, 72 if kind == "rend" else 64)
+		if kind == "impact":
+			Sfx.play("impact", global_position, 0.12)
+		elif kind != "rend":
+			Sfx.play("enemy_hit", global_position, 0.12, -3.0)
 	if hp <= 0.0:
 		die(kind)
 
@@ -153,6 +157,7 @@ func die(_cause: String) -> void:
 	set_deferred("collision_mask", 0)
 	_label.visible = false
 	Art.burst(get_parent(), global_position + Vector3(0, 0.5, 0), Color(0.75, 0.5, 1.0))
+	Sfx.play("crush_kill", global_position, 0.15)
 	if magical:
 		var orb := Pickup.new().setup(Pickup.Kind.MANA_ORB, Game.balance.mana_drop)
 		get_parent().add_child(orb)
@@ -298,6 +303,7 @@ func _physics_process(delta: float) -> void:
 	if can_attack and d < b.enemy_attack_range and _attack_cd <= 0.0 and not _airborne:
 		_attack_cd = b.enemy_attack_cooldown
 		_lunge = 1.0
+		Sfx.play("enemy_attack", global_position, 0.15, -4.0)
 		var dmg := b.enemy_hit_pct * Game.witch_max_hp() * pow(b.level_growth, g)
 		w.take_damage(dmg, "melee")
 

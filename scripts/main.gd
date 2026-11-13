@@ -35,6 +35,7 @@ func _ready() -> void:
 		add_child(bottle)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	hud.show_toast("Find Whisky. Esc for controls, F1 for the debug overlay.")
+	Sfx.play_ambient("limbo_loop", -12.0)
 
 
 func spawn_wave() -> void:

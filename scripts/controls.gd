@@ -28,6 +28,7 @@ const MOUSE_NAMES := {
 }
 
 var sensitivity := 0.0025
+var volume := 0.8
 var _defaults := {}
 var _labels := {}
 
@@ -76,6 +77,8 @@ func load_bindings() -> void:
 	var ok := cfg.load(PATH) == OK
 	if ok:
 		sensitivity = cfg.get_value("mouse", "sensitivity", sensitivity)
+		volume = cfg.get_value("audio", "volume", volume)
+	apply_volume()
 	for a in ACTIONS:
 		var ev: InputEvent = _defaults[a[0]].duplicate()
 		if ok and cfg.has_section_key("bindings", a[0]):
@@ -88,11 +91,16 @@ func load_bindings() -> void:
 func save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("mouse", "sensitivity", sensitivity)
+	cfg.set_value("audio", "volume", volume)
 	for a in ACTIONS:
 		var evs := InputMap.action_get_events(a[0])
 		if not evs.is_empty():
 			cfg.set_value("bindings", a[0], _encode(evs[0]))
 	cfg.save(PATH)
+
+
+func apply_volume() -> void:
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
 
 
 func label(action: String) -> String:
