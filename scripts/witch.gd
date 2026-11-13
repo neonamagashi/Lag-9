@@ -9,6 +9,9 @@ enum FieldMode { CRUSH, LIFT }
 const MODEL_PATH := "res://models/witch.glb"
 const BODY_SHADER := preload("res://shaders/witch_body.gdshader")
 const AURA_SHADER := preload("res://shaders/witch_aura.gdshader")
+const STAFF_SHADER := preload("res://shaders/staff.gdshader")
+const STAFF_PATH := "res://models/staff.glb"
+const STONE_LOCAL := Vector3(0, 0.354, 0)
 const CRUSH_COLOR := Color(0.62, 0.42, 1.0)
 const LIFT_COLOR := Color(0.36, 0.85, 1.0)
 const GOLD := Color(1.0, 0.78, 0.25)
@@ -36,6 +39,11 @@ var draw_charge := -1.0
 var _model: Node3D
 var _staff: Node3D
 var _staff_tip: Node3D
+var _staff_body: Node3D
+var _staff_light: OmniLight3D
+var _staff_glow: Sprite3D
+var _staff_mats: Array[ShaderMaterial] = []
+var _staff_len := 1.0
 var _aura_mats: Array[StandardMaterial3D] = []
 var _body_mats: Array[ShaderMaterial] = []
 var _aura_shader_mats: Array[ShaderMaterial] = []
@@ -114,14 +122,14 @@ func is_invulnerable() -> bool:
 func field_radius() -> float:
 	var b := Game.balance
 	if singularity_t > 0.0:
-		return b.field_radius * b.singularity_radius_mult
+		return b.field_radius * Game.rank_value(b.singularity_radius_mult, b.singularity_rank)
 	if flying:
 		return b.field_radius * b.flight_field_mult
 	return b.field_radius
 
 
 func field_damage_mult() -> float:
-	return Game.balance.singularity_damage_mult if singularity_t > 0.0 else 1.0
+	return Game.rank_value(Game.balance.singularity_damage_mult, Game.balance.singularity_rank) if singularity_t > 0.0 else 1.0
 
 
 func lift_height() -> float:
@@ -541,7 +549,7 @@ func _start_singularity() -> void:
 		Game.env.adjustment_enabled = true
 		Game.env.adjustment_saturation = 0.35
 		Game.env.adjustment_contrast = 1.15
-	Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.8, 0), Color(0.1, 0.0, 0.2), b.field_radius * b.singularity_radius_mult, 0.6)
+	Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.8, 0), Color(0.1, 0.0, 0.2), field_radius(), 0.6)
 	Art.burst(get_parent(), global_position + Vector3(0, 1, 0), Color(0.8, 0.6, 1.0), 60)
 	toast.emit("SINGULARITY")
 
@@ -603,8 +611,7 @@ func _update_visuals(delta: float, dir: Vector3) -> void:
 	var hspeed := Vector3(velocity.x, 0, velocity.z).length()
 	var lean := clampf(hspeed / b.sprint_speed, 0.0, 1.0) * (0.3 if flying else 0.18)
 	_model.rotation.x = lerpf(_model.rotation.x, lean, minf(1.0, delta * 8.0))
-	_staff.position.y = 1.35 + sin(_t * 1.6 + 1.0) * 0.1
-	_staff.rotation.z = -0.18 + sin(_t * 1.1) * 0.06
+	_update_staff(delta)
 	var flicker := 0.3 + (sin(_t * 9.0) * 0.5 + 0.5) * 0.25 * randf_range(0.8, 1.2)
 	if _snap_time > 0.0 or singularity_t > 0.0:
 		flicker = 0.9
@@ -615,8 +622,7 @@ func _update_visuals(delta: float, dir: Vector3) -> void:
 		m.albedo_color = aura_c
 	for m in _aura_shader_mats:
 		m.set_shader_parameter("aura_color", Color(aura_c, aura_c.a * 0.8))
-	if not _body_mats.is_empty():
-		_update_sway(delta)
+	_update_sway(delta)
 	_model.visible = not (_snap_time > 0.0 and b.snap_rank >= 2)
 
 	var sprinting := Input.is_action_pressed("sprint") and hspeed > b.walk_speed * 1.05
@@ -663,35 +669,7 @@ func _build_model() -> void:
 		_apply_model_shaders(inst)
 	else:
 		_build_placeholder()
-	_staff = Node3D.new()
-	_staff.position = Vector3(0.75, 1.35, -0.35)
-	_model.add_child(_staff)
-	var wood := Art.mat(Color(0.42, 0.27, 0.15))
-	var gold := Art.mat(GOLD, Color(0.25, 0.15, 0.0))
-	var shaft := CylinderMesh.new()
-	shaft.top_radius = 0.05
-	shaft.bottom_radius = 0.07
-	shaft.height = 3.0
-	shaft.radial_segments = 6
-	Art.mesh(shaft, wood, Vector3.ZERO, _staff)
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.14
-	ring.outer_radius = 0.2
-	ring.rings = 8
-	ring.ring_segments = 4
-	Art.mesh(ring, gold, Vector3(0, 1.55, 0), _staff).rotation.x = PI / 2
-	var orb := SphereMesh.new()
-	orb.radius = 0.16
-	orb.height = 0.32
-	orb.radial_segments = 6
-	orb.rings = 3
-	_staff_tip = Art.mesh(orb, Art.glow(Color(0.8, 0.6, 1.0), 1.0), Vector3(0, 1.55, 0), _staff)
-	var light := OmniLight3D.new()
-	light.light_color = Color(0.7, 0.55, 1.0)
-	light.light_energy = 1.4
-	light.omni_range = 5.0
-	light.position = Vector3(0, 1.55, 0)
-	_staff.add_child(light)
+	_build_staff()
 	var gp := GPUParticles3D.new()
 	var proc := ParticleProcessMaterial.new()
 	proc.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
@@ -713,6 +691,86 @@ func _build_model() -> void:
 	gp.lifetime = 1.8
 	gp.position.y = 0.1
 	_model.add_child(gp)
+
+
+func _build_staff() -> void:
+	_staff = Node3D.new()
+	_model.add_child(_staff)
+	_staff_body = Node3D.new()
+	_staff.add_child(_staff_body)
+	if ResourceLoader.exists(STAFF_PATH):
+		var scene: PackedScene = load(STAFF_PATH)
+		var inst: Node3D = scene.instantiate()
+		inst.rotation.y = PI / 2
+		_staff_body.add_child(inst)
+		for node in inst.find_children("*", "MeshInstance3D", true, false):
+			var mi: MeshInstance3D = node
+			for i in mi.mesh.get_surface_count():
+				var src := mi.get_active_material(i) as BaseMaterial3D
+				var sm := ShaderMaterial.new()
+				sm.shader = STAFF_SHADER
+				if src and src.albedo_texture:
+					sm.set_shader_parameter("albedo_tex", src.albedo_texture)
+				mi.set_surface_override_material(i, sm)
+				_staff_mats.append(sm)
+	else:
+		var shaft := CylinderMesh.new()
+		shaft.top_radius = 0.02
+		shaft.bottom_radius = 0.025
+		shaft.height = 1.0
+		shaft.radial_segments = 6
+		Art.mesh(shaft, Art.mat(Color(0.75, 0.7, 0.6)), Vector3.ZERO, _staff_body)
+	_staff_tip = Node3D.new()
+	_staff_tip.position = STONE_LOCAL
+	_staff_body.add_child(_staff_tip)
+	_staff_glow = Sprite3D.new()
+	_staff_glow.texture = _glow_texture()
+	_staff_glow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_staff_glow.modulate = Color(0.75, 0.5, 1.0, 0.8)
+	_staff_glow.pixel_size = 0.004
+	_staff_glow.shaded = false
+	_staff_glow.no_depth_test = false
+	_staff_glow.render_priority = 1
+	_staff_tip.add_child(_staff_glow)
+	_staff_light = OmniLight3D.new()
+	_staff_light.light_color = Color(0.7, 0.5, 1.0)
+	_staff_light.omni_range = 4.0
+	_staff_tip.add_child(_staff_light)
+	_staff_len = Game.staff_length()
+
+
+func _glow_texture() -> Texture2D:
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.0, 0.5)
+	t.width = 64
+	t.height = 64
+	return t
+
+
+func _update_staff(delta: float) -> void:
+	var b := Game.balance
+	var maxed := Game.maxed_abilities()
+	_staff_len = lerpf(_staff_len, Game.staff_length(), minf(1.0, delta * 3.0))
+	var grow := _staff_len - b.staff_base_length
+	_staff_body.scale = Vector3.ONE * _staff_len
+	var local_sway := _model.global_basis.orthonormalized().inverse() * _sway
+	_staff.position = Vector3(0.0, 1.0 + grow * 0.2, -0.3 - grow * 0.05) + Vector3(0, sin(_t * 1.6 + 1.0) * 0.04, 0) - local_sway * 0.06
+	_staff.rotation = Vector3(0.0, 0.0, -deg_to_rad(b.staff_tilt_deg) + sin(_t * 1.1) * 0.04)
+	var pulse := 1.0 + sin(_t * 2.4) * 0.25
+	var glow := b.staff_glow_base + b.staff_glow_per_max * maxed
+	if singularity_t > 0.0 or rend_cd > b.rend_cooldown - 1.0:
+		glow *= 2.0
+	for m in _staff_mats:
+		m.set_shader_parameter("glow", glow)
+		m.set_shader_parameter("pulse", pulse)
+	_staff_light.light_energy = (0.6 + 0.25 * maxed) * pulse
+	_staff_glow.modulate.a = clampf(0.35 + 0.08 * maxed, 0.0, 0.9) * pulse
 
 
 func _apply_model_shaders(root: Node) -> void:

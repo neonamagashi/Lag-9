@@ -89,6 +89,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			Game.balance.send_rank = (Game.balance.send_rank + 1) % Game.balance.send_range.size()
 			Game.balance.draw_rank = Game.balance.send_rank
 			hud.show_toast("Send/Draw rank %d%s" % [Game.balance.send_rank + 1, " (all directions)" if Game.balance.send_rank >= 1 else ""])
+		KEY_F12:
+			Game.balance.singularity_rank = (Game.balance.singularity_rank + 1) % Game.balance.singularity_radius_mult.size()
+			hud.show_toast("Singularity rank %d" % (Game.balance.singularity_rank + 1))
 		KEY_F11:
 			Game.balance.rend_rank = (Game.balance.rend_rank + 1) % Game.balance.rend_targets.size()
 			hud.show_toast("Rend rank %d: %d targets%s" % [Game.balance.rend_rank + 1, Game.balance.rend_targets[Game.balance.rend_rank], ", shards" if Game.balance.rend_rank == Game.balance.rend_targets.size() - 1 else ""])

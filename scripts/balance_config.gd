@@ -71,8 +71,9 @@ extends Resource
 @export var singularity_cooldown: float = 80.0
 @export var singularity_mana_cost: float = 60.0
 @export var singularity_duration: float = 6.0
-@export var singularity_radius_mult: float = 3.5
-@export var singularity_damage_mult: float = 2.5
+@export var singularity_rank: int = 0
+@export var singularity_radius_mult: Array[float] = [3.5, 4.2, 5.0]
+@export var singularity_damage_mult: Array[float] = [2.5, 3.0, 3.6]
 @export var singularity_time_scale: float = 0.15
 @export var singularity_lift_height: float = 9.0
 
@@ -124,6 +125,13 @@ extends Resource
 @export var clamber_max_height: float = 2.6
 @export var clamber_reach: float = 0.9
 @export var clamber_time: float = 0.24
+
+@export_group("Staff")
+@export var staff_base_length: float = 1.0
+@export var staff_max_length: float = 3.0
+@export var staff_glow_base: float = 1.5
+@export var staff_glow_per_max: float = 0.5
+@export var staff_tilt_deg: float = 40.0
 
 @export_group("Hair & Hat")
 @export var sway_lift_bias: float = 1.0

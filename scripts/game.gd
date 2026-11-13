@@ -38,6 +38,19 @@ func witch_max_hp() -> float:
 	return balance.witch_base_hp * pow(balance.level_growth, balance.witch_level - 1)
 
 
+func maxed_abilities() -> int:
+	var b := balance
+	var n := 0
+	for pair in [[b.pierce_rank, b.pierce_base_damage], [b.snap_rank, b.snap_distance], [b.send_rank, b.send_range], [b.draw_rank, b.draw_range], [b.rend_rank, b.rend_targets], [b.singularity_rank, b.singularity_radius_mult]]:
+		if pair[0] >= pair[1].size() - 1:
+			n += 1
+	return n
+
+
+func staff_length() -> float:
+	return lerpf(balance.staff_base_length, balance.staff_max_length, maxed_abilities() / 6.0)
+
+
 func pierce_hits_to_kill(gap: int) -> int:
 	var lvl := balance.witch_level + gap
 	return ceili(hp_for_level(lvl) / scaled_damage(rank_value(balance.pierce_base_damage, balance.pierce_rank), lvl))
