@@ -37,7 +37,11 @@ Enemies marked `*` carry mana and drop an orb when they die. Blue bottles around
 All balance and movement numbers live in `data/balance.tres`. Select it in the FileSystem dock and edit the values in the Inspector, grouped by Levels, Gravity Field, Pierce, Snap, Movement, Enemies and Items.
 
 ## Models
-`models/witch.glb` and `models/staff.glb` are game-ready versions (about 12k and 8k triangles, 1024 textures). The original high-detail exports live in `models/source`, which Godot ignores.
+`models/witch_rigged.glb` is the Mixamo-rigged witch (body and hair as separate meshes, 18 hair bones in 5 chains). The game prefers it over `models/witch.glb` when both exist. Her hair runs on Godot's spring bones: it hangs and lags with movement, droops in Crush and floats upward in Lift. Tune it under Hair Physics in `balance.tres` (stiffness is strongest at the roots and loosens toward the tips).
+
+Before exporting from Blender, apply all transforms (Object > Apply > All Transforms) on every mesh and delete the default cube, so pieces land in the right place.
+
+`models/staff.glb` is the game-ready staff (about 8k triangles, 1024 texture). The original high-detail exports live in `models/source`, which Godot ignores.
 
 The staff floats diagonally across her back and grows from 1 m to 3 m as abilities are maxed (one step per maxed ability; F7, F8, F10, F11 and F12 cycle ranks to preview it). Its purple stone and runes glow brighter with each step. Hat and hair sway toward her gravity through a vertex shader; tune both under Staff and Hair & Hat in `balance.tres`.
 

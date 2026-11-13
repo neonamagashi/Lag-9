@@ -133,6 +133,15 @@ extends Resource
 @export var staff_glow_per_max: float = 0.5
 @export var staff_tilt_deg: float = 40.0
 
+@export_group("Hair Physics")
+@export var hair_stiffness: float = 5.0
+@export var hair_drag: float = 0.35
+@export var hair_gravity_idle: float = 0.6
+@export var hair_gravity_crush: float = 1.6
+@export var hair_gravity_lift: float = 4.0
+@export var hair_joint_radius: float = 0.02
+@export var hair_flutter: float = 0.3
+
 @export_group("Hair & Hat")
 @export var sway_lift_bias: float = 1.0
 @export var sway_crush_bias: float = 0.35

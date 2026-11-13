@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://3lggss0k7btb"
-path="res://.godot/imported/witch_0.png-5e0921dda969bfb08d4364947bf84427.ctex"
+uid="uid://ccl4wiq5nvse8"
+path="res://.godot/imported/witch_rigged_witch.png-49ba51c1dbbf1af16515a69d58b76c6c.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "594be1f8b9ed1a5c27ca788f70954732"
+"md5": "10cc0a6dff1c0fa02e64ffd0d98fa9ef"
 }
 
 [deps]
 
-source_file="res://models/witch_0.png"
-dest_files=["res://.godot/imported/witch_0.png-5e0921dda969bfb08d4364947bf84427.ctex"]
+source_file="res://models/witch_rigged_witch.png"
+dest_files=["res://.godot/imported/witch_rigged_witch.png-49ba51c1dbbf1af16515a69d58b76c6c.ctex"]
 
 [params]
 

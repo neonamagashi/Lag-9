@@ -7,6 +7,14 @@ signal toast(text: String)
 enum FieldMode { CRUSH, LIFT }
 
 const MODEL_PATH := "res://models/witch.glb"
+const RIGGED_PATH := "res://models/witch_rigged.glb"
+const HAIR_CHAINS := [
+	["Hair_Back_1", "Hair_Back_4"],
+	["Hair_BackL_1", "Hair_BackL_4"],
+	["Hair_BackR_1", "Hair_BackR_4"],
+	["Hair_FrontL_1", "Hair_FrontL_3"],
+	["Hair_FrontR_1", "Hair_FrontR_3"],
+]
 const BODY_SHADER := preload("res://shaders/witch_body.gdshader")
 const AURA_SHADER := preload("res://shaders/witch_aura.gdshader")
 const STAFF_SHADER := preload("res://shaders/staff.gdshader")
@@ -48,6 +56,11 @@ var _aura_mats: Array[StandardMaterial3D] = []
 var _body_mats: Array[ShaderMaterial] = []
 var _aura_shader_mats: Array[ShaderMaterial] = []
 var _sway := Vector3.ZERO
+var _rigged := false
+var _skeleton: Skeleton3D
+var _hair_sim: SpringBoneSimulator3D
+var _skel_unit := 1.0
+var _hair_state := []
 var _sway_vel := Vector3.ZERO
 var _prev_vel := Vector3.ZERO
 var _field_root: Node3D
@@ -662,7 +675,18 @@ func _apply_field_look() -> void:
 func _build_model() -> void:
 	_model = Node3D.new()
 	add_child(_model)
-	if ResourceLoader.exists(MODEL_PATH):
+	if ResourceLoader.exists(RIGGED_PATH):
+		var rigged: PackedScene = load(RIGGED_PATH)
+		var inst := rigged.instantiate()
+		_model.add_child(inst)
+		for stray in inst.find_children("Cube*", "MeshInstance3D", true, false):
+			stray.queue_free()
+		_apply_model_shaders(inst)
+		for node in inst.find_children("*", "MeshInstance3D", true, false):
+			if node.skin:
+				node.custom_aabb = AABB(Vector3(-1.5, -0.5, -1.5), Vector3(3, 3.5, 3))
+		_setup_hair_physics(inst)
+	elif ResourceLoader.exists(MODEL_PATH):
 		var scene: PackedScene = load(MODEL_PATH)
 		var inst := scene.instantiate()
 		_model.add_child(inst)
@@ -790,7 +814,93 @@ func _apply_model_shaders(root: Node) -> void:
 			_aura_shader_mats.append(aura)
 
 
+func _setup_hair_physics(root: Node) -> void:
+	var skels := root.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		return
+	_skeleton = skels[0]
+	_rigged = true
+	_skel_unit = 1.0 / maxf(_skeleton.global_basis.get_scale().x, 0.0001)
+	var b := Game.balance
+	_hair_sim = SpringBoneSimulator3D.new()
+	_skeleton.add_child(_hair_sim)
+	var chains := HAIR_CHAINS.filter(func(c): return _skeleton.find_bone(c[0]) >= 0 and _skeleton.find_bone(c[1]) >= 0)
+	_hair_sim.setting_count = chains.size()
+	for i in chains.size():
+		_hair_sim.set_root_bone_name(i, chains[i][0])
+		_hair_sim.set_end_bone_name(i, chains[i][1])
+		_hair_sim.set_extend_end_bone(i, true)
+		_hair_sim.set_end_bone_direction(i, SpringBoneSimulator3D.BONE_DIRECTION_FROM_PARENT)
+		_hair_sim.set_end_bone_length(i, 0.06 * _skel_unit)
+		_hair_sim.set_radius(i, b.hair_joint_radius * _skel_unit)
+		_hair_sim.set_stiffness(i, b.hair_stiffness)
+		_hair_sim.set_drag(i, b.hair_drag)
+		_hair_sim.set_gravity(i, b.hair_gravity_idle)
+		_hair_sim.set_gravity_direction(i, Vector3.DOWN)
+		_hair_sim.set_enable_all_child_collisions(i, true)
+		_hair_sim.set_stiffness_damping_curve(i, _curve(1.0, 0.35))
+		_hair_sim.set_gravity_damping_curve(i, _curve(0.15, 1.0))
+	_add_hair_collider("SpringBoneCollisionSphere3D", "mixamorig:Head", 0.105, 0.0, Vector3(0, 0.07, 0.0))
+	_add_hair_collider("SpringBoneCollisionCapsule3D", "mixamorig:Neck", 0.055, 0.14, Vector3(0, 0.03, 0))
+	_add_hair_collider("SpringBoneCollisionCapsule3D", "mixamorig:Spine2", 0.12, 0.38, Vector3(0, 0.02, -0.01))
+	_add_hair_collider("SpringBoneCollisionSphere3D", "mixamorig:LeftShoulder", 0.06, 0.0, Vector3.ZERO)
+	_add_hair_collider("SpringBoneCollisionSphere3D", "mixamorig:RightShoulder", 0.06, 0.0, Vector3.ZERO)
+
+
+func _curve(root_value: float, tip_value: float) -> Curve:
+	var c := Curve.new()
+	c.add_point(Vector2(0.0, root_value))
+	c.add_point(Vector2(1.0, tip_value))
+	return c
+
+
+func _find_bone(bone: String) -> String:
+	for candidate in [bone, bone.replace(":", "_"), bone.get_slice(":", 1)]:
+		if candidate != "" and _skeleton.find_bone(candidate) >= 0:
+			return candidate
+	return ""
+
+
+func _add_hair_collider(kind: String, bone: String, radius: float, height: float, offset: Vector3) -> void:
+	var resolved := _find_bone(bone)
+	if resolved == "":
+		return
+	var c: SpringBoneCollision3D = ClassDB.instantiate(kind)
+	c.bone_name = resolved
+	c.position_offset = offset * _skel_unit
+	c.set("radius", radius * _skel_unit)
+	if height > 0.0:
+		c.set("height", height * _skel_unit)
+	_hair_sim.add_child(c)
+
+
+func _update_hair(delta: float) -> void:
+	var b := Game.balance
+	var dir := Vector3.DOWN
+	var g := b.hair_gravity_idle
+	if field_on:
+		if field_mode == FieldMode.LIFT:
+			dir = Vector3.UP
+			g = b.hair_gravity_lift
+		else:
+			g = b.hair_gravity_crush
+	if singularity_t > 0.0:
+		g *= 1.5
+	var state := [g, dir, b.hair_stiffness, b.hair_drag]
+	if state != _hair_state:
+		_hair_state = state
+		for i in _hair_sim.setting_count:
+			_hair_sim.set_gravity(i, g)
+			_hair_sim.set_gravity_direction(i, dir)
+			_hair_sim.set_stiffness(i, b.hair_stiffness)
+			_hair_sim.set_drag(i, b.hair_drag)
+	var flutter := Vector3(sin(_t * 3.1), sin(_t * 2.3) * 0.5, cos(_t * 2.7)) * b.hair_flutter
+	_hair_sim.external_force = flutter
+
+
 func _update_sway(delta: float) -> void:
+	if _rigged:
+		_update_hair(delta)
 	var b := Game.balance
 	var accel := (velocity - _prev_vel) / maxf(delta, 0.0001)
 	_prev_vel = velocity
@@ -802,14 +912,16 @@ func _update_sway(delta: float) -> void:
 	_sway_vel *= exp(-b.sway_damping * delta)
 	_sway += _sway_vel * delta
 	var local := _model.global_basis.orthonormalized().inverse() * _sway
+	var hat_amt := 0.0 if _rigged else b.hat_sway_amount
+	var hair_amt := 0.0 if _rigged else b.hair_sway_amount
 	for m in _body_mats:
 		m.set_shader_parameter("sway", local)
-		m.set_shader_parameter("hat_amount", b.hat_sway_amount)
-		m.set_shader_parameter("hair_amount", b.hair_sway_amount)
+		m.set_shader_parameter("hat_amount", hat_amt)
+		m.set_shader_parameter("hair_amount", hair_amt)
 	for m in _aura_shader_mats:
 		m.set_shader_parameter("sway", local)
-		m.set_shader_parameter("hat_amount", b.hat_sway_amount)
-		m.set_shader_parameter("hair_amount", b.hair_sway_amount)
+		m.set_shader_parameter("hat_amount", hat_amt)
+		m.set_shader_parameter("hair_amount", hair_amt)
 
 
 func _add_aura(material: StandardMaterial3D) -> StandardMaterial3D:

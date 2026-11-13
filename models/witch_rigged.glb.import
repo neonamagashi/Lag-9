@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dn1fa8qru641h"
-path="res://.godot/imported/witch.glb-75e3a0584bde5c4123766df61f6fd235.scn"
+uid="uid://d0y8kf8gga3cp"
+path="res://.godot/imported/witch_rigged.glb-c61defdf58149758ba909480a6b93d3e.scn"
 
 [deps]
 
-source_file="res://models/witch.glb"
-dest_files=["res://.godot/imported/witch.glb-75e3a0584bde5c4123766df61f6fd235.scn"]
+source_file="res://models/witch_rigged.glb"
+dest_files=["res://.godot/imported/witch_rigged.glb-c61defdf58149758ba909480a6b93d3e.scn"]
 
 [params]
 
