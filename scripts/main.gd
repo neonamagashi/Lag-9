@@ -1,6 +1,12 @@
 extends Node3D
 
-const WAVE_GAPS := [-3, -2, -1, 0, 0, 1, 2, 3, 4, 5, 6, 8]
+const WAVE := [
+	["gnawling", -3], ["gnawling", -2], ["gnawling", -1], ["gnawling", 0],
+	["glutton", 3], ["glutton", 6],
+	["acolyte", 0], ["acolyte", 2],
+	["seer", 1], ["seer", 5],
+	["archer", 0], ["archer", 4],
+]
 
 var witch: Witch
 var rig: CameraRig
@@ -40,10 +46,10 @@ func _ready() -> void:
 
 func spawn_wave() -> void:
 	var lvl := Game.balance.witch_level
-	for i in WAVE_GAPS.size():
-		var a := TAU * i / WAVE_GAPS.size() + randf_range(-0.15, 0.15)
+	for i in WAVE.size():
+		var a := TAU * i / WAVE.size() + randf_range(-0.15, 0.15)
 		var r := randf_range(15.0, 22.0)
-		var e := Enemy.new().setup(lvl + WAVE_GAPS[i])
+		var e := Enemy.new().setup(lvl + int(WAVE[i][1]), str(WAVE[i][0]))
 		var flat := Vector3(witch.global_position.x + cos(a) * r, 0, witch.global_position.z + sin(a) * r)
 		e.position = flat.limit_length(34.0) + Vector3(0, 0.3, 0)
 		add_child(e)
@@ -62,7 +68,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			debug.toggle()
 		KEY_F2:
 			spawn_wave()
-			hud.show_toast("Spawned a wave (gaps −3 to +8)")
+			hud.show_toast("Spawned a wave: gnawlings, gluttons, acolytes, seers, archers")
 		KEY_F3:
 			hud.show_toast("3D render scale %d%%" % int(debug.cycle_scale() * 100))
 		KEY_F4:

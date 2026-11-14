@@ -6,8 +6,11 @@ signal toast(text: String)
 
 enum FieldMode { CRUSH, LIFT }
 
-const MODEL_PATH := "res://models/witch.glb"
-const RIGGED_PATH := "res://models/witch_rigged.glb"
+const RIGGED_PATH := "res://models/witch/witch_rigged.glb"
+const BODY_PATH := "res://models/witch/witch_body.glb"
+const HAIR_PATH := "res://models/witch/witch_hair.glb"
+const HAIR_SHADER := preload("res://shaders/hair.gdshader")
+const HAIR_AURA_SHADER := preload("res://shaders/hair_aura.gdshader")
 const HAIR_CHAINS := [
 	["Hair_Back_1", "Hair_Back_4"],
 	["Hair_BackL_1", "Hair_BackL_4"],
@@ -18,7 +21,7 @@ const HAIR_CHAINS := [
 const BODY_SHADER := preload("res://shaders/witch_body.gdshader")
 const AURA_SHADER := preload("res://shaders/witch_aura.gdshader")
 const STAFF_SHADER := preload("res://shaders/staff.gdshader")
-const STAFF_PATH := "res://models/staff.glb"
+const STAFF_PATH := "res://models/witch/staff.glb"
 const STONE_LOCAL := Vector3(0, 0.354, 0)
 const CRUSH_COLOR := Color(0.62, 0.42, 1.0)
 const LIFT_COLOR := Color(0.36, 0.85, 1.0)
@@ -57,6 +60,9 @@ var _body_mats: Array[ShaderMaterial] = []
 var _aura_shader_mats: Array[ShaderMaterial] = []
 var _sway := Vector3.ZERO
 var _rigged := false
+var _split_model := false
+var _hair_mats: Array[ShaderMaterial] = []
+var _lift_amount := 0.0
 var _skeleton: Skeleton3D
 var _hair_sim: SpringBoneSimulator3D
 var _skel_unit := 1.0
@@ -713,11 +719,15 @@ func _build_model() -> void:
 			if node.skin:
 				node.custom_aabb = AABB(Vector3(-1.5, -0.5, -1.5), Vector3(3, 3.5, 3))
 		_setup_hair_physics(inst)
-	elif ResourceLoader.exists(MODEL_PATH):
-		var scene: PackedScene = load(MODEL_PATH)
-		var inst := scene.instantiate()
-		_model.add_child(inst)
-		_apply_model_shaders(inst)
+	elif ResourceLoader.exists(BODY_PATH):
+		var body: Node3D = (load(BODY_PATH) as PackedScene).instantiate()
+		_model.add_child(body)
+		_apply_model_shaders(body)
+		_split_model = true
+		if ResourceLoader.exists(HAIR_PATH):
+			var hair: Node3D = (load(HAIR_PATH) as PackedScene).instantiate()
+			_model.add_child(hair)
+			_apply_hair_shaders(hair)
 	else:
 		_build_placeholder()
 	_build_staff()
@@ -822,6 +832,25 @@ func _update_staff(delta: float) -> void:
 		m.set_shader_parameter("pulse", pulse)
 	_staff_light.light_energy = (0.6 + 0.25 * maxed) * pulse
 	_staff_glow.modulate.a = clampf(0.35 + 0.08 * maxed, 0.0, 0.9) * pulse
+
+
+func _apply_hair_shaders(root: Node) -> void:
+	for node in root.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node
+		for i in mi.mesh.get_surface_count():
+			var src := mi.get_active_material(i) as BaseMaterial3D
+			var hair := ShaderMaterial.new()
+			hair.shader = HAIR_SHADER
+			if src and src.albedo_texture:
+				hair.set_shader_parameter("albedo_tex", src.albedo_texture)
+			var aura := ShaderMaterial.new()
+			aura.shader = HAIR_AURA_SHADER
+			aura.set_shader_parameter("aura_color", Color(GOLD, 0.12))
+			aura.set_shader_parameter("grow", 0.006)
+			hair.next_pass = aura
+			mi.set_surface_override_material(i, hair)
+			_hair_mats.append(hair)
+			_hair_mats.append(aura)
 
 
 func _apply_model_shaders(root: Node) -> void:
@@ -939,8 +968,19 @@ func _update_sway(delta: float) -> void:
 	_sway_vel *= exp(-b.sway_damping * delta)
 	_sway += _sway_vel * delta
 	var local := _model.global_basis.orthonormalized().inverse() * _sway
-	var hat_amt := 0.0 if _rigged else b.hat_sway_amount
-	var hair_amt := 0.0 if _rigged else b.hair_sway_amount
+	var hat_amt := 0.0 if (_rigged or _split_model) else b.hat_sway_amount
+	var hair_amt := 0.0 if (_rigged or _split_model) else b.hair_sway_amount
+	var lift_goal := 0.0
+	if field_on and field_mode == FieldMode.LIFT:
+		lift_goal = 1.5 if singularity_t > 0.0 else 1.0
+	_lift_amount = lerpf(_lift_amount, lift_goal, minf(1.0, delta * 3.0))
+	var hair_sway := local
+	if field_on and field_mode == FieldMode.LIFT:
+		hair_sway -= _model.global_basis.orthonormalized().inverse() * (Vector3.UP * b.sway_lift_bias)
+	for m in _hair_mats:
+		m.set_shader_parameter("sway", hair_sway)
+		m.set_shader_parameter("lift", _lift_amount)
+		m.set_shader_parameter("amount", b.split_hair_sway_amount)
 	for m in _body_mats:
 		m.set_shader_parameter("sway", local)
 		m.set_shader_parameter("hat_amount", hat_amt)

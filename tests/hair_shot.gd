@@ -16,11 +16,10 @@ func _process(_delta: float) -> void:
 		get_tree().call_group("enemies", "queue_free")
 		main.debug.toggle()
 		main.hud.visible = false
-		w.rig.arm.spring_length = 2.6
+		w.rig.arm.spring_length = 3.4
 		w.rig.yaw = PI * 0.5
 		w.rig.pitch = -0.08
 		w.rig.position.y += 0.0
-		print("colliders: ", w._hair_sim.get_child_count())
 	if frames == 70:
 		_save("hair_crush")
 		w.field_mode = Witch.FieldMode.LIFT

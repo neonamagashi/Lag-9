@@ -149,6 +149,7 @@ extends Resource
 @export var sway_inertia: float = 0.035
 @export var sway_stiffness: float = 60.0
 @export var sway_damping: float = 7.0
+@export var split_hair_sway_amount: float = 0.3
 @export var hat_sway_amount: float = 0.14
 @export var hair_sway_amount: float = 0.07
 

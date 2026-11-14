@@ -5,6 +5,8 @@ static var _meshes := {}
 static var _mats := {}
 
 var level := 1
+var kind := "imp"
+var cfg: Dictionary = {}
 var max_hp := 100.0
 var hp := 100.0
 var magical := false
@@ -29,10 +31,12 @@ var _rend_t := -1.0
 var _rend_total := 1.0
 var _rend_lift := false
 var _rend_shards := false
+var _strafe_sign := 1.0
 
 
-func setup(lvl: int) -> Enemy:
+func setup(lvl: int, enemy_kind := "imp") -> Enemy:
 	level = maxi(1, lvl)
+	kind = enemy_kind
 	magical = randf() < Game.balance.mana_creature_chance
 	return self
 
@@ -41,33 +45,90 @@ func _ready() -> void:
 	add_to_group("enemies")
 	collision_layer = 4
 	collision_mask = 1 | 4
-	max_hp = Game.hp_for_level(level)
+	cfg = EnemyTypes.config(kind)
+	max_hp = Game.hp_for_level(level) * float(cfg["hp_mult"])
 	hp = max_hp
 	_phase = randf() * TAU
+	_strafe_sign = 1.0 if randf() < 0.5 else -1.0
 	_ground_y = global_position.y
+	var h := float(cfg["height"])
+	var r := float(cfg["radius"])
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.45
-	cap.height = 1.3
+	cap.radius = r
+	cap.height = maxf(h * 0.95, r * 2.0 + 0.05)
 	col.shape = cap
-	col.position.y = 0.65
+	col.position.y = cap.height * 0.5
 	add_child(col)
-	_ensure_shared()
 	_model = Node3D.new()
 	add_child(_model)
+	var model_path: String = cfg["model"]
+	if model_path != "" and ResourceLoader.exists(model_path):
+		var body := _fit_model((load(model_path) as PackedScene).instantiate(), h)
+		_model.add_child(body)
+		var extra: String = cfg["extra"]
+		if extra != "" and ResourceLoader.exists(extra):
+			_attach_bow((load(extra) as PackedScene).instantiate(), body)
+	else:
+		_build_blob()
+	_label = Label3D.new()
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.font_size = 40
+	_label.outline_size = 8
+	_label.pixel_size = 0.007
+	_label.position.y = h + float(cfg["hover"]) + 0.4
+	add_child(_label)
+
+
+func _build_blob() -> void:
+	_ensure_shared()
 	var eye_mat: Material = _mats.eye_magic if magical else _mats.eye
 	Art.mesh(_meshes.body, _mats.body, Vector3(0, 0.5, 0), _model)
 	Art.mesh(_meshes.horn, _mats.horn, Vector3(-0.2, 0.92, 0), _model).rotation.z = 0.45
 	Art.mesh(_meshes.horn, _mats.horn, Vector3(0.2, 0.92, 0), _model).rotation.z = -0.45
 	Art.mesh(_meshes.eye, eye_mat, Vector3(-0.15, 0.6, 0.4), _model)
 	Art.mesh(_meshes.eye, eye_mat, Vector3(0.15, 0.6, 0.4), _model)
-	_label = Label3D.new()
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.font_size = 40
-	_label.outline_size = 8
-	_label.pixel_size = 0.007
-	_label.position.y = 1.75
-	add_child(_label)
+
+
+func _fit_model(inst: Node3D, height: float) -> Node3D:
+	var holder := Node3D.new()
+	holder.add_child(inst)
+	inst.rotation.y = -PI / 2.0
+	var box := _local_aabb(holder)
+	if box.size.y > 0.0001:
+		var k := height / box.size.y
+		inst.scale = Vector3.ONE * k
+		box = _local_aabb(holder)
+		inst.position = Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
+	return holder
+
+
+func _local_aabb(root: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for node in root.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node
+		var xf := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != root and n is Node3D:
+			xf = (n as Node3D).transform * xf
+			n = n.get_parent()
+		var b := xf * mi.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+func _attach_bow(bow: Node3D, body: Node3D) -> void:
+	var box := _local_aabb(body)
+	var holder := Node3D.new()
+	holder.add_child(bow)
+	var bb := _local_aabb(holder)
+	var k := float(cfg["height"]) * 0.7 / maxf(bb.size.y, 0.001)
+	bow.scale = Vector3.ONE * k
+	holder.position = Vector3(box.end.x - 0.06, float(cfg["height"]) * 0.5, 0.06)
+	holder.rotation.y = PI / 2.0
+	body.add_child(holder)
 
 
 static func _ensure_shared() -> void:
@@ -109,7 +170,7 @@ func gap() -> int:
 func knock(v: Vector3, stun: float) -> void:
 	if _dead:
 		return
-	var resist := 1.0 / (1.0 + maxf(0.0, gap()) * Game.balance.knock_resist_per_gap)
+	var resist := 1.0 / ((1.0 + maxf(0.0, gap()) * Game.balance.knock_resist_per_gap) * float(cfg.get("mass", 1.0)))
 	_knock_vel = Vector3(v.x, 0, v.z) * resist
 	_knock_t = 0.7
 	_stun_t = maxf(_stun_t, stun)
@@ -276,8 +337,19 @@ func _physics_process(delta: float) -> void:
 		_knock_vel *= exp(-2.5 * delta)
 	else:
 		var hv := Vector3.ZERO
-		if d > b.enemy_attack_range * 0.85 and lift_to <= 1.0 and _stun_t <= 0.0:
-			hv = dir * b.enemy_speed * speed_mult * ts
+		var spd := float(cfg["speed"])
+		if lift_to <= 1.0 and _stun_t <= 0.0:
+			if cfg["ranged"]:
+				var keep := float(cfg["keep_range"])
+				if d > keep + 2.0:
+					hv = dir * spd
+				elif d < keep - 3.0:
+					hv = -dir * spd * 0.8
+				else:
+					hv = dir.cross(Vector3.UP) * spd * 0.45 * _strafe_sign
+			elif d > float(cfg["attack_range"]) * 0.85:
+				hv = dir * spd
+			hv *= speed_mult * ts
 		velocity.x = move_toward(velocity.x, hv.x, 30.0 * delta)
 		velocity.z = move_toward(velocity.z, hv.z, 30.0 * delta)
 		if d > 0.01 and lift_to <= 1.0:
@@ -300,17 +372,36 @@ func _physics_process(delta: float) -> void:
 			_airborne = false
 		_ground_y = global_position.y
 
-	if can_attack and d < b.enemy_attack_range and _attack_cd <= 0.0 and not _airborne:
-		_attack_cd = b.enemy_attack_cooldown
+	var dmg := b.enemy_hit_pct * Game.witch_max_hp() * pow(b.level_growth, g) * float(cfg["dmg_mult"])
+	if cfg["ranged"]:
+		if can_attack and d < float(cfg["fire_range"]) and _attack_cd <= 0.0 and not _airborne:
+			_attack_cd = float(cfg["cooldown"]) * randf_range(0.85, 1.15)
+			_fire(w, dmg)
+	elif can_attack and d < float(cfg["attack_range"]) and _attack_cd <= 0.0 and not _airborne:
+		_attack_cd = float(cfg["cooldown"])
 		_lunge = 1.0
-		Sfx.play("enemy_attack", global_position, 0.15, -4.0)
-		var dmg := b.enemy_hit_pct * Game.witch_max_hp() * pow(b.level_growth, g)
+		Sfx.play("enemy_attack", global_position, 0.15, -4.0 if kind != "glutton" else 2.0)
 		w.take_damage(dmg, "melee")
 
 	_squash = lerpf(_squash, target_squash, minf(1.0, delta * 10.0))
 	_model.scale = Vector3(1.0 + (1.0 - _squash) * 0.5, _squash, 1.0 + (1.0 - _squash) * 0.5)
-	_model.position = Vector3(randf_range(-shake, shake), 0, randf_range(-shake, shake)) + Vector3(0, 0, _lunge * 0.4).rotated(Vector3.UP, _model.rotation.y)
+	var hover := float(cfg["hover"])
+	if hover > 0.0:
+		hover += sin(Time.get_ticks_msec() * 0.0025 + _phase) * 0.08
+	_model.position = Vector3(randf_range(-shake, shake), hover, randf_range(-shake, shake)) + Vector3(0, 0, _lunge * 0.4).rotated(Vector3.UP, _model.rotation.y)
 	_tick_labels(delta, g)
+
+
+func _fire(w: Witch, dmg: float) -> void:
+	var proj_kind: String = cfg["projectile"]
+	var h := float(cfg["height"])
+	var facing := Vector3(sin(_model.rotation.y), 0, cos(_model.rotation.y))
+	var from := global_position + Vector3(0, h * 0.62 + float(cfg["hover"]), 0) + facing * 0.5
+	var p := Projectile.new().launch(proj_kind, from, w.field_center(), dmg)
+	get_parent().add_child(p)
+	p.global_position = from
+	_lunge = 0.6
+	Sfx.play({"fireball": "fireball_cast", "void": "void_cast", "arrow": "arrow_shot"}.get(proj_kind, "whiff"), from, 0.1, -2.0)
 
 
 func _check_knock_collisions(speed: float) -> void:

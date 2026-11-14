@@ -65,6 +65,10 @@ d = 0.35; tt = t(d); save("dodge", mix(np.sin(2*np.pi*2093*tt) * env(len(tt), 0.
 d = 0.35; tt = t(d); save("enemy_attack", lp(saw(2*np.pi*(95 + 25*np.sin(2*np.pi*11*tt)) * tt) + noise(d) * 0.4, 1200) * env(len(tt), 0.03, curve=1.5))
 d = 0.05; save("ui_click", sweep(1800, 900, d, sq) * env(int(SR*d), 0.001, curve=4), 0.5)
 d = 0.25; save("whiff", lp(noise(d), np.linspace(1500, 5000, int(SR*d))) * env(int(SR*d), 0.01, curve=2), 0.6)
+d = 0.45; n = noise(d); save("fireball_cast", mix(lp(n, np.linspace(900, 3000, len(n))) * env(len(n), 0.02, curve=1.5), sweep(90, 160, d, saw) * env(int(SR*d), 0.02) * 0.3 * 0.5))
+d = 0.6; tt = t(d); save("void_cast", lp(np.sin(2*np.pi*(220 + 80*np.sin(2*np.pi*7*tt))*tt) + np.sin(2*np.pi*331*tt)*0.5, 2500) * env(len(tt), 0.03, curve=1.8) * (0.7 + 0.3*np.sin(2*np.pi*13*tt)))
+d = 0.22; tt = t(d); save("arrow_shot", mix(np.sin(2*np.pi*190*tt) * np.exp(-tt*18), hp(noise(d), 2500) * env(len(tt), 0.002, curve=3) * 0.6))
+d = 0.3; save("projectile_crushed", crush(mix(lp(noise(d), np.linspace(4000, 300, int(SR*d))) * env(int(SR*d), 0.001, curve=2.5), sweep(400, 70, 0.2) * env(int(SR*0.2), 0.001, curve=2) * 0.7), 6))
 L = 8.0; tt = t(L)
 drone = np.sin(2*np.pi*55*tt) * 0.5 + np.sin(2*np.pi*55.5*tt) * 0.4 + np.sin(2*np.pi*82.5*tt) * 0.2
 wind_raw = noise(L + 1.0)
