@@ -6,7 +6,7 @@ signal toast(text: String)
 
 enum FieldMode { CRUSH, LIFT }
 
-const RIGGED_PATH := "res://models/witch/witch_rigged.glb"
+const RIGGED_PATH := "res://models/witch/witch_rigged.fbx"
 const BODY_PATH := "res://models/witch/witch_body.glb"
 const HAIR_PATH := "res://models/witch/witch_hair.glb"
 const HAIR_SHADER := preload("res://shaders/hair.gdshader")
@@ -23,6 +23,33 @@ const AURA_SHADER := preload("res://shaders/witch_aura.gdshader")
 const STAFF_SHADER := preload("res://shaders/staff.gdshader")
 const STAFF_PATH := "res://models/witch/staff.glb"
 const STONE_LOCAL := Vector3(0, 0.354, 0)
+const ANIM_PACKS := [
+	"res://animations/Universal Animation Library/Unreal-Godot/UAL1_Standard.glb",
+	"res://animations/Universal Animation Library 2/Unreal-Godot/UAL2_Standard.glb",
+]
+const ANIMS := {
+	"idle": "Idle_FoldArms",
+	"lounge_enter": "Sitting_Enter",
+	"lounge": "Sitting_Idle",
+	"air": "NinjaJump_Idle",
+	"jump": "NinjaJump_Start",
+	"charge": "Crouch_Idle",
+	"fly": "Swim_Fwd",
+	"fly_idle": "Swim_Idle",
+	"clamber": "ClimbUp_1m",
+	"snap": "Shield_Dash",
+	"pierce": "Spell_Simple_Shoot",
+	"send_hold": "Push",
+	"send": "OverhandThrow",
+	"draw_hold": "Spell_Simple_Idle",
+	"draw": "Chest_Open",
+	"rend": "Spell_Simple_Enter",
+	"rend_hold": "Spell_Simple_Idle",
+	"singularity": "Chest_Open",
+	"drink": "Consume",
+	"hit": "Hit_Chest",
+}
+const LOUNGE_AFTER := 8.0
 const CRUSH_COLOR := Color(0.62, 0.42, 1.0)
 const LIFT_COLOR := Color(0.36, 0.85, 1.0)
 const GOLD := Color(1.0, 0.78, 0.25)
@@ -97,6 +124,13 @@ var _contact_accum := 0.0
 var _ghost_t := 0.0
 var _charge_sound: AudioStreamPlayer
 var _t := 0.0
+var _anim: AnimationPlayer
+var _anim_base := ""
+var _shot_t := 0.0
+var _hold_key := ""
+var _hold_t := 0.0
+var _idle_t := 0.0
+var _was_airborne := false
 
 
 func _ready() -> void:
@@ -179,6 +213,7 @@ func take_damage(amount: float, kind: String) -> void:
 			_contact_accum = 0.0
 	else:
 		_hurt_flash = 0.15
+		_play_shot("hit", 1.4)
 		Sfx.play("witch_hurt", global_position, 0.1)
 		Art.popup(get_parent(), global_position + Vector3(0, 2.0, 0), str(int(amount)), Color(1, 0.35, 0.3), 56)
 	hp_changed.emit(hp, Game.witch_max_hp())
@@ -199,6 +234,7 @@ func drink() -> void:
 		toast.emit("Already at full health")
 		return
 	whisky -= 1
+	_play_shot("drink", 1.6)
 	Sfx.play("whisky", global_position)
 	var heal := Game.witch_max_hp() * Game.balance.whisky_heal_pct
 	hp = minf(Game.witch_max_hp(), hp + heal)
@@ -282,6 +318,7 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 		if full or (_charge_released and _charge_t >= b.air_jump_min_charge):
 			var k := clampf((_charge_t - b.air_jump_min_charge) / (b.air_jump_max_charge - b.air_jump_min_charge), 0.0, 1.0)
 			velocity.y = lerpf(b.air_jump_min_velocity, b.air_jump_max_velocity, k)
+			_play_shot("jump", 1.8)
 			velocity += dir * b.walk_speed * 0.6
 			_charging = false
 			_stop_charge_sound()
@@ -295,6 +332,7 @@ func _process_ground(delta: float, dir: Vector3) -> void:
 	if _jump_buffer > 0.0 and _coyote > 0.0:
 		Sfx.play("whiff", global_position, 0.1, -8.0)
 		velocity.y = b.jump_velocity
+		_play_shot("jump", 1.8)
 		_jump_buffer = 0.0
 		_coyote = 0.0
 	elif _jump_buffer > 0.0 and not on_floor and not _air_jump_used:
@@ -402,6 +440,7 @@ func _try_clamber(dir: Vector3) -> bool:
 	_stop_charge_sound()
 	Sfx.play("whiff", global_position, 0.1, -4.0)
 	velocity = Vector3.ZERO
+	_play_shot("clamber", _anim_length("clamber") / maxf(b.clamber_time * 1.6, 0.05))
 	return true
 
 
@@ -435,6 +474,7 @@ func _start_snap(dir: Vector3) -> void:
 	_charging = false
 	_stop_charge_sound()
 	Sfx.play("snap", global_position, 0.06)
+	_play_shot("snap", 3.0)
 	var from := global_position + Vector3(0, 1.0, 0)
 	var width := 0.9 - clampi(r, 0, 2) * 0.38
 	Art.streak(get_parent(), from, from + d * dist, CRUSH_COLOR.lerp(GOLD, 0.35), width, 0.25 + r * 0.05)
@@ -527,6 +567,7 @@ func _fire_push(outward: bool, charge: float) -> void:
 		draw_cd = b.draw_cooldown
 	var color := Color(1.0, 0.65, 0.35) if outward else Color(0.5, 0.85, 1.0)
 	Sfx.play("send" if outward else "draw", global_position, 0.05, -4.0 + 4.0 * charge)
+	_play_shot("send" if outward else "draw", 2.0)
 	var origin := global_position + Vector3(0, 1.0, 0)
 	if all_dirs:
 		Art.ring_pulse(get_parent(), global_position + Vector3(0, 0.6, 0), color, reach if outward else reach * 0.6, 0.35)
@@ -577,6 +618,8 @@ func _rend() -> void:
 	rend_cd = b.rend_cooldown
 	_face_cam = 0.6
 	Sfx.play("rend", global_position, 0.05)
+	_play_shot("rend", 1.5)
+	_queue_hold("rend_hold", b.rend_hold_time)
 	for e in targets:
 		e.rend_start(b.rend_hold_time, field_mode == FieldMode.LIFT, shards)
 		Art.streak(get_parent(), _staff_tip.global_position, e.global_position + Vector3(0, 0.6, 0), Color(0.75, 0.4, 1.0), 0.08, b.rend_hold_time)
@@ -589,6 +632,7 @@ func _start_singularity() -> void:
 	singularity_cd = b.singularity_cooldown
 	field_on = true
 	Sfx.play("singularity", global_position, 0.0, 2.0)
+	_play_shot("singularity", 1.2)
 	Game.enemy_time_scale = b.singularity_time_scale
 	if Game.env:
 		Game.env.adjustment_enabled = true
@@ -636,6 +680,7 @@ func _pierce() -> void:
 		var e: Enemy = hit.collider
 		e.take_damage(Game.scaled_damage(Game.rank_value(b.pierce_base_damage, b.pierce_rank), e.level), "pierce")
 	Art.streak(get_parent(), _staff_tip.global_position, end, Color(0.85, 0.7, 1.0), 0.06, 0.12)
+	_play_shot("pierce", 1.6)
 	Sfx.play("pierce", _staff_tip.global_position, 0.1, -5.0)
 
 
@@ -669,6 +714,7 @@ func _update_visuals(delta: float, dir: Vector3) -> void:
 	for m in _aura_shader_mats:
 		m.set_shader_parameter("aura_color", Color(aura_c, aura_c.a * 0.8))
 	_update_sway(delta)
+	_update_anim(delta, dir)
 	_model.visible = not (_snap_time > 0.0 and b.snap_rank >= 2)
 
 	var sprinting := Input.is_action_pressed("sprint") and hspeed > b.walk_speed * 1.05
@@ -719,6 +765,8 @@ func _build_model() -> void:
 			if node.skin:
 				node.custom_aabb = AABB(Vector3(-1.5, -0.5, -1.5), Vector3(3, 3.5, 3))
 		_setup_hair_physics(inst)
+		_attach_hair()
+		_setup_anim(inst)
 	elif ResourceLoader.exists(BODY_PATH):
 		var body: Node3D = (load(BODY_PATH) as PackedScene).instantiate()
 		_model.add_child(body)
@@ -878,9 +926,11 @@ func _setup_hair_physics(root: Node) -> void:
 	_rigged = true
 	_skel_unit = 1.0 / maxf(_skeleton.global_basis.get_scale().x, 0.0001)
 	var b := Game.balance
+	if _chains_available().is_empty():
+		return
 	_hair_sim = SpringBoneSimulator3D.new()
 	_skeleton.add_child(_hair_sim)
-	var chains := HAIR_CHAINS.filter(func(c): return _skeleton.find_bone(c[0]) >= 0 and _skeleton.find_bone(c[1]) >= 0)
+	var chains := _chains_available()
 	_hair_sim.setting_count = chains.size()
 	for i in chains.size():
 		_hair_sim.set_root_bone_name(i, chains[i][0])
@@ -901,6 +951,26 @@ func _setup_hair_physics(root: Node) -> void:
 	_add_hair_collider("SpringBoneCollisionCapsule3D", "mixamorig:Spine2", 0.12, 0.38, Vector3(0, 0.02, -0.01))
 	_add_hair_collider("SpringBoneCollisionSphere3D", "mixamorig:LeftShoulder", 0.06, 0.0, Vector3.ZERO)
 	_add_hair_collider("SpringBoneCollisionSphere3D", "mixamorig:RightShoulder", 0.06, 0.0, Vector3.ZERO)
+
+
+func _chains_available() -> Array:
+	return HAIR_CHAINS.filter(func(c): return _skeleton.find_bone(c[0]) >= 0 and _skeleton.find_bone(c[1]) >= 0)
+
+
+func _attach_hair() -> void:
+	if not _skeleton or not ResourceLoader.exists(HAIR_PATH):
+		return
+	var head := _skeleton.find_bone("Head")
+	if head < 0:
+		return
+	var att := BoneAttachment3D.new()
+	att.bone_name = "Head"
+	_skeleton.add_child(att)
+	var hair: Node3D = (load(HAIR_PATH) as PackedScene).instantiate()
+	att.add_child(hair)
+	hair.transform = _skeleton.get_bone_global_rest(head).affine_inverse()
+	_apply_hair_shaders(hair)
+	_split_model = true
 
 
 func _curve(root_value: float, tip_value: float) -> Curve:
@@ -955,7 +1025,7 @@ func _update_hair(delta: float) -> void:
 
 
 func _update_sway(delta: float) -> void:
-	if _rigged:
+	if _hair_sim:
 		_update_hair(delta)
 	var b := Game.balance
 	var accel := (velocity - _prev_vel) / maxf(delta, 0.0001)
@@ -1113,3 +1183,107 @@ func _build_field() -> void:
 	_field_root.add_child(_field_particles)
 	field_mode = FieldMode.CRUSH
 	_apply_field_look()
+
+
+# ---------- animation ----------
+func _setup_anim(inst: Node) -> void:
+	if not _skeleton:
+		return
+	var lib := AnimationLibrary.new()
+	for pack in ANIM_PACKS:
+		if not ResourceLoader.exists(pack):
+			continue
+		var src: Node = (load(pack) as PackedScene).instantiate()
+		for p in src.find_children("*", "AnimationPlayer", true, false):
+			var ap: AnimationPlayer = p
+			for n in ap.get_animation_list():
+				if not lib.has_animation(n):
+					lib.add_animation(n, ap.get_animation(n))
+		src.free()
+	if lib.get_animation_list().is_empty():
+		return
+	_anim = AnimationPlayer.new()
+	inst.add_child(_anim)
+	_anim.root_node = _anim.get_path_to(inst)
+	_anim.add_animation_library("", lib)
+	_set_base("idle")
+
+
+func _has_anim(key: String) -> bool:
+	return _anim != null and _anim.has_animation(ANIMS.get(key, ""))
+
+
+func _anim_length(key: String) -> float:
+	return _anim.get_animation(ANIMS[key]).length if _has_anim(key) else 1.0
+
+
+func _set_base(key: String, blend := 0.18) -> void:
+	if key == _anim_base or not _has_anim(key):
+		return
+	_anim_base = key
+	if _shot_t <= 0.0:
+		_anim.play(ANIMS[key], blend)
+
+
+func _play_shot(key: String, speed := 1.0) -> void:
+	if not _has_anim(key):
+		return
+	_idle_t = 0.0
+	_anim.play(ANIMS[key], 0.06, speed)
+	_anim.seek(0.0, false)
+	_shot_t = _anim_length(key) / maxf(speed, 0.01)
+	_hold_key = ""
+
+
+func _queue_hold(key: String, time: float) -> void:
+	if _has_anim(key):
+		_hold_key = key
+		_hold_t = time
+
+
+func _update_anim(delta: float, dir: Vector3) -> void:
+	if not _anim:
+		return
+	var b := Game.balance
+	var airborne := not is_on_floor() and not flying and _clamber_t < 0.0
+	var busy := dir.length() > 0.05 or flying or airborne or send_charge >= 0.0 or draw_charge >= 0.0 \
+		or singularity_t > 0.0 or _snap_time > 0.0 or _clamber_t >= 0.0 or _charging \
+		or Input.is_action_pressed("pierce")
+	_idle_t = 0.0 if busy else _idle_t + delta
+
+	if _shot_t > 0.0:
+		_shot_t -= delta
+		if _shot_t <= 0.0:
+			if _hold_key != "":
+				_anim.play(ANIMS[_hold_key], 0.1)
+				_shot_t = _hold_t
+				_hold_key = ""
+			else:
+				_anim.play(ANIMS.get(_anim_base, ANIMS.idle), 0.2)
+
+	var key := "idle"
+	if send_charge >= 0.0:
+		key = "send_hold"
+	elif draw_charge >= 0.0:
+		key = "draw_hold"
+	elif _charging:
+		key = "charge"
+	elif flying:
+		key = "fly" if Vector3(velocity.x, 0, velocity.z).length() > b.flight_speed * 0.35 else "fly_idle"
+	elif airborne:
+		key = "air"
+	elif _idle_t > LOUNGE_AFTER:
+		key = "lounge"
+
+	if key in ["send_hold", "draw_hold", "charge"] and _shot_t > 0.0:
+		_shot_t = 0.0
+		_hold_key = ""
+	if key == "lounge" and _anim_base != "lounge" and _shot_t <= 0.0:
+		_anim_base = "lounge"
+		_play_shot("lounge_enter")
+		_idle_t = LOUNGE_AFTER + 1.0
+		return
+	if _was_airborne and not airborne and not flying and _shot_t <= 0.0:
+		_anim_base = ""
+	_was_airborne = airborne
+	_set_base(key, 0.12 if _anim_base == "lounge" else 0.18)

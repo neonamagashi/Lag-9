@@ -41,7 +41,7 @@ Each character has its own folder in `models/`:
 
 | Folder | Game file | Notes |
 |---|---|---|
-| `witch/` | `witch_body.glb`, `witch_hair.glb`, `staff.glb` | Body is the quad-remeshed bald model, oriented and scaled to 5 ft in its file transform; scalp painted hair-colored. Hair is the separate curly wig, fitted to her head (6k triangles). When the rig arrives, save it as `witch/witch_rigged.glb` and the game uses it automatically. |
+| `witch/` | `witch_rigged.fbx`, `witch_hair.glb`, `staff.glb` | `witch_rigged.fbx` is the auto-rigged body (Mixamo skeleton, 5 ft). The game uses it first; the curly hair is pinned to her Head bone so it follows every animation. `witch_body.glb` is the unrigged fallback. |
 | `gnawling/`, `glutton/`, `acolyte/`, `seer/`, `archer/` | `<name>.glb` (+ `archer/bow.glb`) | Loaded as-is; the game turns, scales and grounds each one at load (sizes live in `scripts/enemy_types.gd`). |
 | `*/rigger/` | FBX zips with quad topology | Hand these to the rigger. Godot ignores these folders. |
 | `source/` | Original high-detail exports | Kept for reference. Godot ignores this folder. |
@@ -69,3 +69,27 @@ Code plays sounds by name, for example `Sfx.play("pierce", position)`. Sounds cu
 
 ## Environment assets
 `assets/environment/Ultimate Stylized Nature Pack` (Quaternius, CC0). Only the glTF version is kept. Add new packs the same way: one format plus the license file.
+
+## Animations
+
+`animations/` holds the Universal Animation Library packs (UAL1 + UAL2, about 86 clips). Both packs and the witch rig import through Godot's humanoid retargeting (`animations/retarget/*_bone_map.tres`, set in each file's Advanced Import > Skeleton > Retarget), so any clip plays on her.
+
+To browse them: double-click `UAL1_Standard.glb` or `UAL2_Standard.glb` in the FileSystem dock, open the Animation tab in the import window, and press play on any clip. That previews on the mannequin; in game the same clip drives the witch.
+
+Which clip plays when is the `ANIMS` table at the top of `scripts/witch.gd`. Swap any name there to try a different clip.
+
+| State | Clip |
+|---|---|
+| Float / move | Idle_FoldArms |
+| Lounge (8 s idle) | Sitting_Enter → Sitting_Idle |
+| Jump / airborne / air-jump charge | NinjaJump_Start / NinjaJump_Idle / Crouch_Idle |
+| Flight moving / hovering | Swim_Fwd / Swim_Idle |
+| Clamber | ClimbUp_1m (sped up) |
+| Snap | Shield_Dash (fast) |
+| Pierce | Spell_Simple_Shoot |
+| Send hold / release | Push / OverhandThrow |
+| Draw hold / release | Spell_Simple_Idle / Chest_Open |
+| Rend | Spell_Simple_Enter → Spell_Simple_Idle |
+| Singularity | Chest_Open |
+| Whisky | Consume |
+| Hit | Hit_Chest |
