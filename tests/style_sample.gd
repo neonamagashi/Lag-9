@@ -6,8 +6,8 @@ const POST := preload("res://shaders/style/post.gdshader")
 const RUINS := "res://assets/environment/Ultimate Modular Ruins Pack/FBX/"
 const NATURE := "res://assets/environment/Stylized Nature MegaKit/glTF/"
 
-var mode := "sable"
-var retro := false
+@export_enum("sable", "current") var mode := "sable"
+@export var retro := false
 var cam: Camera3D
 var frames := 0
 var ink := Color(0.16, 0.11, 0.1)
@@ -15,8 +15,9 @@ var pastel := 0.15
 
 
 func _ready() -> void:
-	mode = OS.get_environment("STYLE")
-	retro = OS.get_environment("RETRO") == "1"
+	if OS.has_environment("STYLE"):
+		mode = OS.get_environment("STYLE")
+		retro = OS.get_environment("RETRO") == "1"
 	_world()
 	_ground()
 	_props()
@@ -241,6 +242,6 @@ func _toon(col: Color, tex: Texture2D) -> ShaderMaterial:
 
 func _process(_d: float) -> void:
 	frames += 1
-	if frames == 20:
+	if frames == 20 and OS.has_environment("SHOT"):
 		get_viewport().get_texture().get_image().save_png(OS.get_environment("SHOT"))
 		get_tree().quit()
