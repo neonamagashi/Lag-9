@@ -906,13 +906,19 @@ func _apply_model_shaders(root: Node) -> void:
 		var mi: MeshInstance3D = node
 		for i in mi.mesh.get_surface_count():
 			var src := mi.get_active_material(i) as BaseMaterial3D
-			var body := ShaderMaterial.new()
-			body.shader = BODY_SHADER
-			if src and src.albedo_texture:
-				body.set_shader_parameter("albedo_tex", src.albedo_texture)
 			var aura := ShaderMaterial.new()
 			aura.shader = AURA_SHADER
-			body.next_pass = aura
+			var body: ShaderMaterial
+			if Style.enabled:
+				body = Style.toon(src.albedo_texture if src else null, Color.WHITE, 1.4)
+				body.set_shader_parameter("posterize", 9.0)
+				body.next_pass.next_pass = aura
+			else:
+				body = ShaderMaterial.new()
+				body.shader = BODY_SHADER
+				if src and src.albedo_texture:
+					body.set_shader_parameter("albedo_tex", src.albedo_texture)
+				body.next_pass = aura
 			mi.set_surface_override_material(i, body)
 			_body_mats.append(body)
 			_aura_shader_mats.append(aura)

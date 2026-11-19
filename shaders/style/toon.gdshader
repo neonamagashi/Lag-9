@@ -12,6 +12,8 @@ uniform float hatch_spacing = 5.0;
 uniform float pastel = 0.25;
 uniform vec3 pastel_color : source_color = vec3(0.98, 0.92, 0.82);
 uniform float snap = 0.0;
+uniform float posterize = 0.0;
+uniform float saturation = 1.0;
 
 void vertex() {
 	vec4 clip = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
@@ -26,7 +28,13 @@ void fragment() {
 	if (use_tex) {
 		c *= texture(albedo_tex, UV);
 	}
-	ALBEDO = mix(c.rgb, pastel_color, pastel);
+	vec3 rgb = c.rgb;
+	if (posterize > 0.0) {
+		rgb = floor(rgb * posterize + 0.5) / posterize;
+	}
+	float l = dot(rgb, vec3(0.299, 0.587, 0.114));
+	rgb = mix(vec3(l), rgb, saturation);
+	ALBEDO = mix(rgb, pastel_color, pastel);
 }
 
 void light() {

@@ -13,20 +13,25 @@ var rig: CameraRig
 var hud: Hud
 var debug: DebugOverlay
 var menu: ControlsMenu
+var level: LevelCanyon
 var _stone: ImageTexture
 var _stone_light: ImageTexture
 
 
 func _ready() -> void:
-	_build_environment()
-	_build_arena()
+	if Style.enabled:
+		_build_sable_world()
+	else:
+		_build_environment()
+		_build_arena()
 	witch = Witch.new()
-	witch.position = Vector3(0, 0.2, 8)
+	witch.position = level.player_start if level else Vector3(0, 0.2, 8)
 	add_child(witch)
 	rig = CameraRig.new()
 	rig.target = witch
 	add_child(rig)
 	witch.rig = rig
+	Style.attach_post(rig.camera)
 	hud = Hud.new()
 	add_child(hud)
 	hud.connect_witch(witch)
@@ -35,7 +40,8 @@ func _ready() -> void:
 	menu = ControlsMenu.new()
 	add_child(menu)
 	spawn_wave()
-	for pos in [Vector3(-20, 2.6, -6), Vector3(18, 0, 18), Vector3(-18, 0, 20), Vector3(14, 2.7, -18.5)]:
+	var bottles: Array = level.bottle_points if level else [Vector3(-20, 2.6, -6), Vector3(18, 0, 18), Vector3(-18, 0, 20), Vector3(14, 2.7, -18.5)]
+	for pos in bottles:
 		var bottle := Pickup.new().setup(Pickup.Kind.MANA_BOTTLE, Game.balance.mana_bottle_amount)
 		bottle.position = pos
 		add_child(bottle)
@@ -46,6 +52,14 @@ func _ready() -> void:
 
 func spawn_wave() -> void:
 	var lvl := Game.balance.witch_level
+	if level:
+		var pts := level.spawn_points.duplicate()
+		pts.shuffle()
+		for i in WAVE.size():
+			var e := Enemy.new().setup(lvl + int(WAVE[i][1]), str(WAVE[i][0]))
+			e.position = pts[i % pts.size()] + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
+			add_child(e)
+		return
 	for i in WAVE.size():
 		var a := TAU * i / WAVE.size() + randf_range(-0.15, 0.15)
 		var r := randf_range(15.0, 22.0)
@@ -80,6 +94,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			witch.reset_stats()
 			get_tree().call_group("enemies", "mark_dirty")
 			hud.show_toast("Witch level %d" % Game.balance.witch_level)
+		KEY_F5:
+			Style.set_retro(not Style.retro)
+			hud.show_toast("Retro filter %s" % ("on" if Style.retro else "off"))
 		KEY_F6:
 			witch.reset_stats()
 			hud.show_toast("Healed and whisky refilled")
@@ -105,6 +122,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # ---------- world ----------
+func _build_sable_world() -> void:
+	var env := Style.environment()
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+	Game.env = env
+	add_child(Style.sun())
+	level = LevelCanyon.new()
+	add_child(level)
+
+
 func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR

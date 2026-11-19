@@ -71,6 +71,7 @@ func _ready() -> void:
 			_attach_bow((load(extra) as PackedScene).instantiate(), body)
 	else:
 		_build_blob()
+	Style.toonify(_model, 1.3)
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.font_size = 40

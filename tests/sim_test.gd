@@ -9,6 +9,7 @@ var log_lines: PackedStringArray = []
 
 
 func _ready() -> void:
+	Style.enabled = false
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 	w = Game.witch
