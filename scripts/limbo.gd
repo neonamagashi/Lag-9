@@ -197,48 +197,50 @@ func _build_warden() -> void:
 	warden = Node2D.new()
 	warden.position = WARDEN_AT
 	main.world.add_child(warden)
-	var pool := Node2D.new()
-	pool.z_index = -1
-	pool.draw.connect(func():
-		for i in 4:
-			var pts := PackedVector2Array()
-			for k in 24:
-				var a := k / 24.0 * TAU
-				pts.append(Vector2(cos(a) * (46 - i * 9), sin(a) * (12 - i * 2.2)))
-			pool.draw_colored_polygon(pts, Color(0, 0, 0, 0.12)))
-	warden.add_child(pool)
+	# the cloak's train lies on the floor, under everything that walks over it
+	var train_sf := SpriteFrames.new()
+	train_sf.remove_animation("default")
+	Sheets.add(train_sf, "flow", "res://assets/limbo/warden_train.png", 280, 200, 8, 6.0, true)
+	var train := AnimatedSprite2D.new()
+	train.sprite_frames = train_sf
+	train.centered = false
+	train.offset = Vector2(-140, -176)
+	train.position = WARDEN_AT
+	train.z_index = -5
+	main.world.add_child(train)
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
-	Sheets.add(sf, "sway", "res://assets/limbo/warden.png", 56, 104, 4, 3.0, true)
+	Sheets.add(sf, "flow", "res://assets/limbo/warden.png", 280, 200, 8, 6.0, true)
 	var s := AnimatedSprite2D.new()
 	s.sprite_frames = sf
 	s.centered = false
-	s.offset = Vector2(-28, -102)
-	s.scale = Vector2.ONE * 1.5
-	s.play("sway")
+	s.offset = Vector2(-140, -176)
 	warden.add_child(s)
+	s.play("flow")
+	train.play("flow")
 	var smoke := CPUParticles2D.new()
-	smoke.amount = 40
-	smoke.lifetime = 2.4
+	smoke.amount = 70
+	smoke.lifetime = 2.6
 	smoke.preprocess = 2.0
 	smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	smoke.emission_rect_extents = Vector2(30, 6)
-	smoke.position = Vector2(0, -6)
-	smoke.direction = Vector2(0, -1)
+	smoke.emission_rect_extents = Vector2(100, 10)
+	smoke.position = Vector2(8, -14)
+	smoke.direction = Vector2(0.5, -1)
 	smoke.spread = 30.0
-	smoke.initial_velocity_min = 6.0
-	smoke.initial_velocity_max = 16.0
-	smoke.gravity = Vector2(0, -4)
+	smoke.initial_velocity_min = 5.0
+	smoke.initial_velocity_max = 14.0
+	smoke.gravity = Vector2(6, -3)
 	smoke.texture = Fx.soft()
-	smoke.scale_amount_min = 0.4
-	smoke.scale_amount_max = 0.9
+	smoke.scale_amount_min = 0.35
+	smoke.scale_amount_max = 0.8
 	var g := Gradient.new()
 	g.set_color(0, Color(0.02, 0.01, 0.04, 0.0))
-	g.add_point(0.25, Color(0.05, 0.04, 0.08, 0.6))
+	g.add_point(0.25, Color(0.05, 0.04, 0.08, 0.45))
 	g.set_color(g.get_point_count() - 1, Color(0.3, 0.28, 0.35, 0.0))
 	smoke.color_ramp = g
-	smoke.z_index = 1
-	warden.add_child(smoke)
+	smoke.z_index = 2
+	train.add_child(smoke)
+	smoke.position = Vector2(8, -14)
 	var body := StaticBody2D.new()
 	body.collision_layer = 1
 	var col := CollisionShape2D.new()

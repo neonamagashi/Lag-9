@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c6fn7rjovyigj"
-path="res://.godot/imported/run_eyes.png-0565ba0602f433e0264dd3f505471648.ctex"
+uid="uid://fn2ionwyb4py"
+path="res://.godot/imported/warden_train.png-d694ba85cc49cf9cce4fdf664e7c4cad.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/witch_white/run_eyes.png"
-dest_files=["res://.godot/imported/run_eyes.png-0565ba0602f433e0264dd3f505471648.ctex"]
+source_file="res://assets/limbo/warden_train.png"
+dest_files=["res://.godot/imported/warden_train.png-d694ba85cc49cf9cce4fdf664e7c4cad.ctex"]
 
 [params]
 

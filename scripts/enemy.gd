@@ -61,6 +61,7 @@ const DPS_MID := {1: 0.55, 2: 0.3, 3: 0.12}
 const SLOW_OUTER := {1: 0.35, 2: 0.5, 3: 0.7}
 const LIFT_Z := {1: 34.0, 2: 22.0, 3: 6.0}
 const TICK := 0.5
+const KNOCK_FRICTION := 400.0
 const BOSS_FIELD_MULT := 0.3
 
 static var _frames := {}
@@ -97,6 +98,14 @@ var _shot_cfg: Dictionary = {}
 var _shooting := false
 var _path := PackedVector2Array()
 var _path_t := 0.0
+var _hold_vel := Vector2.ZERO
+var _squeeze := 0.0
+var _spasm := 0.0
+var _grip: Node2D
+var _bump_from: Node
+var _bump_t := 0.0
+var _strafe_t := 0.0
+var _strafe_dir := 1.0
 
 
 func setup(k: String) -> Enemy:
@@ -156,6 +165,19 @@ func _update_visual(delta: float) -> void:
 	visual.scale *= vis_scale * Vector2(1.0 + 0.4 * _stretch, 1.0 - 0.18 * _stretch)
 	if rending:
 		visual.position.x += randf_range(-1.5, 1.5)
+	elif grabbed:
+		# squeezed in an invisible fist: crushed inward, shuddering, struggling
+		var sq := _squeeze
+		visual.scale *= Vector2(1.0 - 0.3 * sq, 1.0 - 0.14 * sq + 0.06 * sin(_spasm * 3.0))
+		visual.position += Vector2(randf_range(-1.0, 1.0), randf_range(-0.6, 0.6)) * (0.4 + sq)
+		_struggle_t -= delta
+		if _struggle_t <= 0.0:
+			_struggle_t = randf_range(0.08, 0.18) * (1.2 - sq * 0.5)
+			var f: int = STRUGGLE.get(kind, 1)
+			sprite.frame = f if sprite.frame != f else maxi(0, f - 1)
+		if _grip:
+			_grip.position = Vector2(0, -z - body_height * 0.5)
+			_grip.queue_redraw()
 	elif pinned and not boss:
 		_struggle_t -= delta
 		if _struggle_t <= 0.0:
@@ -190,6 +212,8 @@ func _physics_process(delta: float) -> void:
 		_held_update(delta)
 		return
 	_cd -= dt
+	_bump_t -= dt
+	_strafe_t -= dt
 	_hurt_t -= dt
 	_knock_t -= dt
 	_stun_t -= dt
@@ -265,8 +289,9 @@ func _physics_process(delta: float) -> void:
 		_shooting = false
 	else:
 		_ai(w, dt, speed_mult, resists)
+	var pre := velocity
 	move_and_slide()
-	_collisions()
+	_collisions(pre)
 
 
 func _steer(goal: Vector2, dt: float) -> Vector2:
@@ -302,7 +327,7 @@ func _barrier(w: Witch, v: Vector2) -> Vector2:
 
 func _ai(w: Witch, dt: float, speed_mult: float, resists: bool) -> void:
 	if _knock_t > 0.0:
-		velocity = velocity.move_toward(Vector2.ZERO, 500.0 * dt)
+		velocity = velocity.move_toward(Vector2.ZERO, KNOCK_FRICTION * dt)
 		return
 	if _stun_t > 0.0 or lifted or _hurt_t > 0.0:
 		velocity = velocity.move_toward(Vector2.ZERO, 600.0 * dt)
@@ -327,6 +352,7 @@ func _ai(w: Witch, dt: float, speed_mult: float, resists: bool) -> void:
 			_struck = true
 			var shot := EnemyShot.new()
 			shot.setup(_shot_cfg.shot, global_position + Vector2(facing * 8.0, 0), w.global_position, z + body_height * 0.55)
+			shot.shooter = self
 			Fx.world.add_child(shot)
 		if sprite.animation != "shoot" or not sprite.is_playing():
 			_shooting = false
@@ -353,7 +379,12 @@ func _ai(w: Witch, dt: float, speed_mult: float, resists: bool) -> void:
 		return
 	if not _shot_cfg.is_empty():
 		stand_off = _shot_cfg.keep
-		if to.length() < _shot_cfg.range and _cd <= 0.0:
+		if to.length() < _shot_cfg.range and _cd <= 0.0 and _strafe_t <= 0.0:
+			if _shot_cfg.shot != "bomb" and _ally_in_line(w.global_position):
+				# an ally is in the way: sidestep for a clear shot instead of firing
+				_strafe_t = randf_range(0.4, 0.8)
+				_strafe_dir = -1.0 if randf() < 0.5 else 1.0
+				return
 			_shooting = true
 			_struck = false
 			play("shoot", true)
@@ -363,12 +394,28 @@ func _ai(w: Witch, dt: float, speed_mult: float, resists: bool) -> void:
 		want = _steer(w.global_position, dt) * cfg.speed * speed_mult
 	elif not _shot_cfg.is_empty() and to.length() < stand_off - 20.0:
 		want = -to.normalized() * cfg.speed * 0.6 * speed_mult
+	if _strafe_t > 0.0:
+		want = to.normalized().orthogonal() * _strafe_dir * cfg.speed * 0.8 * speed_mult
 	var sep := Vector2.ZERO
 	for o in get_tree().get_nodes_in_group("enemies"):
 		if o != self and not o.dead:
 			var d: Vector2 = global_position - o.global_position
-			if d.length() < 18.0 and d.length() > 0.01:
-				sep += d.normalized() * (18.0 - d.length()) * 3.0
+			var room: float = hit_radius + o.hit_radius + 10.0
+			if d.length() < room and d.length() > 0.01:
+				sep += d.normalized() * (room - d.length()) * 3.5
+			# keep clear of anything thrown or knocked flying
+			if (o._knock_t > 0.0 or o.grabbed) and d.length() < 60.0 and o.velocity.length() > 80.0:
+				var lane: Vector2 = o.velocity.normalized()
+				var off := d - lane * d.dot(lane)
+				if d.dot(lane) > 0.0 and off.length() < 26.0:
+					sep += (off.normalized() if off.length() > 0.5 else lane.orthogonal()) * cfg.speed * 1.2
+	# get out from under falling bombs
+	for b in get_tree().get_nodes_in_group("enemy_shots"):
+		if b.kind == "bomb" and not b.done:
+			var d: Vector2 = global_position - b.landing
+			var r: float = b.cfg.splash + 14.0
+			if d.length() < r:
+				sep += (d.normalized() if d.length() > 0.5 else Vector2.RIGHT) * cfg.speed * 1.3
 	var v := want + sep
 	if not resists:
 		v = _barrier(w, v)
@@ -376,20 +423,24 @@ func _ai(w: Witch, dt: float, speed_mult: float, resists: bool) -> void:
 	play("move" if velocity.length() > 6.0 else "idle")
 
 
-func _collisions() -> void:
+func _collisions(pre: Vector2) -> void:
 	if _knock_t <= 0.0:
 		return
 	for i in get_slide_collision_count():
 		var c := get_slide_collision(i)
-		var speed := velocity.length()
-		if speed < 90.0 and _knock_t < 0.3:
+		var speed := pre.length()
+		if speed < 80.0:
 			continue
 		var other := c.get_collider()
+		if other is Enemy:
+			if other.dead or (other == _bump_from and _bump_t > 0.0):
+				continue
+			_body_hit(other, pre, c.get_normal(), c.get_position())
+			break
+		if speed < 90.0 and _knock_t < 0.3:
+			continue
 		var force := maxf(speed, 160.0)
 		var dmg := max_hp * 0.22 * clampf(force / 300.0, 0.4, 1.4)
-		if other is Enemy and not other.dead:
-			other.hit(dmg * 0.6, velocity * 0.5)
-			other.knock(velocity.normalized(), force * 0.5, 0.0)
 		Fx.burst(c.get_position(), Color(0.8, 0.75, 0.9), 8, 60.0, 6.0)
 		Sfx.play("impact", 0.1, -4.0)
 		Fx.shake(2.5)
@@ -397,6 +448,45 @@ func _collisions() -> void:
 		_knock_t = 0.0
 		velocity = c.get_normal() * 30.0
 		break
+
+
+## Two bodies collide: momentum passes on by weight, both get hurt, and the struck one can go on to hit others.
+func _body_hit(other: Enemy, v: Vector2, normal: Vector2, at: Vector2) -> void:
+	var speed := v.length()
+	_bump_from = other
+	_bump_t = 0.35
+	other._bump_from = self
+	other._bump_t = 0.35
+	var ratio := clampf(float(weight) / float(other.weight), 0.4, 1.8)
+	var dmg := (5.0 + speed * 0.035) * (0.7 + 0.3 * weight)
+	var dir := v.normalized().lerp(-normal, 0.5).normalized()
+	if other.grabbed:
+		other.hit(dmg, Vector2.ZERO)
+	else:
+		other.knock(dir, speed * 0.95 * sqrt(ratio), dmg)
+	hit(dmg * 0.6 / ratio, Vector2.ZERO)
+	velocity = v.bounce(normal) * 0.3 / ratio
+	_knock_t = minf(_knock_t, 0.15)
+	Fx.burst(at + Vector2(0, -z - body_height * 0.4), Color(0.85, 0.8, 0.95), 10, 70.0, 0.0)
+	Fx.anim("slam_ring", at, 1.2, Color.WHITE, 0.0, 0.5, -1)
+	Sfx.play("impact", 0.1, -3.0)
+	Fx.shake(2.0 + minf(speed / 200.0, 2.0))
+
+
+func _ally_in_line(goal: Vector2) -> bool:
+	var seg := goal - global_position
+	var n := seg.length()
+	if n < 1.0:
+		return false
+	var dir := seg / n
+	for o in get_tree().get_nodes_in_group("enemies"):
+		if o == self or o.dead or o.dormant:
+			continue
+		var d: Vector2 = o.global_position - global_position
+		var t := d.dot(dir)
+		if t > 4.0 and t < n - 12.0 and (d - dir * t).length() < o.hit_radius + 5.0:
+			return true
+	return false
 
 
 func _land(impact: float) -> void:
@@ -449,7 +539,8 @@ func knock(dir: Vector2, force: float, dmg: float, pull := false) -> void:
 		return
 	var resist: float = {1: 1.0, 2: 0.7, 3: 0.35}[weight]
 	velocity = dir * force * resist
-	_knock_t = 0.35 if not pull else 0.25
+	# airborne/sliding until friction has bled the speed off
+	_knock_t = maxf(0.25, force * resist / KNOCK_FRICTION) if not pull else 0.25
 	_attack_t = -1.0
 	if not pull:
 		vz = force * 0.3 * resist
@@ -501,39 +592,89 @@ func grab(w: Witch) -> void:
 	_attack_t = -1.0
 	_shooting = false
 	_knock_t = 0.0
+	_hold_vel = velocity * 0.5
+	_squeeze = 0.0
 	play("hurt", true)
 	sprite.pause()
 	Fx.anim("lift_frame", global_position, 0.55, Color(0.8, 0.7, 1.0), body_height * 0.5)
+	_grip = Node2D.new()
+	_grip.z_index = 1
+	_grip.draw.connect(_draw_grip)
+	add_child(_grip)
+
+
+## Four dark "fingers" closing around the body, tightening with the squeeze.
+func _draw_grip() -> void:
+	var r := (hit_radius + 7.0) * (1.0 - 0.25 * _squeeze)
+	var c := Color(0.2, 0.1, 0.35, 0.55 + 0.35 * _squeeze) if Fx.dark_world else Color(0.75, 0.6, 1.0, 0.45 + 0.4 * _squeeze)
+	for i in 4:
+		var a0 := i * TAU / 4.0 + 0.35 + sin(_spasm + i) * 0.05
+		_grip.draw_arc(Vector2.ZERO, r, a0, a0 + 0.9, 8, c, 1.0)
+		var tip := Vector2(cos(a0 + 0.9), sin(a0 + 0.9)) * (r - 3.0 - 2.0 * _squeeze)
+		_grip.draw_line(Vector2(cos(a0 + 0.9), sin(a0 + 0.9)) * r, tip, c, 1.0)
 
 
 func _held_update(delta: float) -> void:
 	if not is_instance_valid(_holder) or _holder.dead:
 		drop()
 		return
+	_update_visual_hold(delta)
 	var target := _holder.hold_point()
-	velocity = (target - global_position) * 14.0
+	# held on a spring: lags behind the hand and swings when she moves her aim
+	var stiff := 70.0 / (0.6 + 0.4 * weight)
+	_hold_vel += ((target - global_position) * stiff - _hold_vel * 7.0) * delta
+	velocity = _hold_vel
+	var pre := velocity
 	move_and_slide()
-	z = move_toward(z, 18.0 + sin(Time.get_ticks_msec() / 160.0) * 1.5, 120.0 * delta)
-	vz = 0.0
-	visual.rotation = sin(Time.get_ticks_msec() / 90.0) * 0.08
+	for i in get_slide_collision_count():
+		var c := get_slide_collision(i)
+		var other := c.get_collider()
+		if other is Enemy and not other.dead and pre.length() > 120.0 and not (other == _bump_from and _bump_t > 0.0):
+			_body_hit(other, pre, c.get_normal(), c.get_position())
+			_hold_vel = velocity
+			break
+	_bump_t -= delta
+	var dangle := 16.0 + sin(Time.get_ticks_msec() / 160.0) * 1.5
+	vz += ((dangle - z) * 60.0 - vz * 8.0) * delta
+	z += vz * delta
+	var swing := clampf(-_hold_vel.x * 0.0035, -0.55, 0.55)
+	visual.rotation = lerpf(visual.rotation, swing, 1.0 - exp(-delta * 10.0))
+
+
+func _update_visual_hold(delta: float) -> void:
+	var charge := 0.0
+	if _holder.throw_charge >= 0.0:
+		charge = _holder.throw_charge / Witch.THROW_MAX_CHARGE
+	_spasm += delta * (6.0 + 8.0 * charge)
+	var beat := pow(maxf(0.0, sin(_spasm)), 3.0)
+	_squeeze = clampf(0.35 + 0.35 * beat + 0.4 * charge, 0.0, 1.0)
+	if beat > 0.95 and randf() < 0.3:
+		Sfx.play("enemy_hit", 0.25, -16.0, 0.6)
+	_field_damage(max_hp * (0.04 + 0.06 * charge) * delta)
 
 
 func release(dir: Vector2, force: float, dmg: float) -> void:
-	grabbed = false
-	_holder = null
-	visual.rotation = 0.0
-	velocity = dir * force
-	_knock_t = 0.45
+	_let_go()
+	velocity = dir * force + _hold_vel * 0.3
+	_knock_t = maxf(0.4, velocity.length() / KNOCK_FRICTION)
 	vz = 60.0
 	if dmg > 0.0:
 		hit(dmg, Vector2.ZERO)
 
 
 func drop() -> void:
+	_let_go()
+	vz = -40.0
+
+
+func _let_go() -> void:
 	grabbed = false
 	_holder = null
 	visual.rotation = 0.0
-	vz = -40.0
+	_squeeze = 0.0
+	if _grip:
+		_grip.queue_free()
+		_grip = null
 
 
 func slam() -> void:

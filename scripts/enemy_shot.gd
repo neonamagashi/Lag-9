@@ -19,7 +19,9 @@ var _target := Vector2.ZERO
 var _vel := Vector2.ZERO
 var _t := 0.0
 var _flight := 1.0
-var _done := false
+var done := false
+var shooter: Node
+var landing := Vector2.ZERO
 var _sprite: AnimatedSprite2D
 var _shadow: Node2D
 
@@ -31,6 +33,7 @@ func setup(k: String, from: Vector2, target: Vector2, h: float) -> void:
 	_from = from
 	_target = target
 	height = h
+	landing = target
 	_vel = (target - from).normalized() * cfg.speed
 	_flight = maxf(from.distance_to(target) / cfg.speed, 0.25)
 
@@ -59,7 +62,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _done:
+	if done:
 		return
 	var w: Witch = Fx.world.get_meta("witch")
 	var dt := delta * (0.35 if w and w.singularity_t > 0.0 and w.field_dist(global_position) < w.r_outer() else 1.0)
@@ -85,6 +88,8 @@ func _physics_process(delta: float) -> void:
 		if _t > 4.0:
 			queue_free()
 		return
+	if cfg.arc <= 0.0 and _hit_enemy(z):
+		return
 	var dist := w.field_dist(global_position)
 	if not cfg.magic and dist < w.r_inner():
 		_crushed()
@@ -100,8 +105,20 @@ func _physics_process(delta: float) -> void:
 		_burst(false)
 
 
+## Friendly fire: shots don't care whose side they're on.
+func _hit_enemy(z: float) -> bool:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == shooter or e.dead or e.dormant:
+			continue
+		if global_position.distance_to(e.global_position) < e.hit_radius + 5.0 and absf(z - (e.z + e.body_height * 0.5)) < e.body_height:
+			e.hit(cfg.dmg, _vel.normalized() * 40.0)
+			_burst(false)
+			return true
+	return false
+
+
 func _crushed() -> void:
-	_done = true
+	done = true
 	Fx.anim("crush_ring", global_position, 0.45, Color(0.85, 0.75, 1.0), 6.0)
 	Fx.burst(global_position, Color(0.75, 0.7, 0.85), 8, 50.0, 6.0)
 	Sfx.play("projectile_crushed", 0.1, -6.0)
@@ -109,11 +126,14 @@ func _crushed() -> void:
 
 
 func _burst(splash: bool) -> void:
-	_done = true
+	done = true
 	if splash and cfg.splash > 0.0:
 		var w: Witch = Fx.world.get_meta("witch")
 		if w and not w.dead and global_position.distance_to(w.global_position) < cfg.splash:
 			w.take_damage(cfg.dmg, global_position)
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if not e.dead and not e.dormant and global_position.distance_to(e.global_position) < cfg.splash + e.hit_radius:
+				e.knock((e.global_position - global_position).normalized(), 160.0, cfg.dmg)
 		Fx.shake(1.5)
 		Sfx.play("impact", 0.1, -6.0)
 	_shadow.visible = false

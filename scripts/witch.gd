@@ -7,7 +7,7 @@ const DIR := "res://assets/witch_white/%s.png"
 const CRUSH_COLOR := Color(0.55, 0.42, 1.0)
 const LIFT_COLOR := Color(1.0, 0.82, 0.4)
 const ELLIPSE := 0.6
-const WAND_TIP := Vector2(16, -22)
+const HAND_TIP := Vector2(11, -18)
 
 # ---------- tuning ----------
 const SPEED := 118.0
@@ -93,9 +93,9 @@ func _ready() -> void:
 	sf.remove_animation("default")
 	ef.remove_animation("default")
 	var defs := [
-		["idle", "idle", 64, 64, 6, 8.0, true, 0], ["run", "run", 64, 64, 6, 12.0, true, 0],
+		["idle", "idle", 64, 64, 6, 8.0, true, 0],
 		["hurt", "hurt", 64, 64, 3, 12.0, false, 0], ["death", "death", 64, 64, 11, 10.0, false, 0],
-		["cast", "cast", 44, 47, 3, 24.0, false, 0], ["cast_hold", "cast", 44, 47, 6, 14.0, true, 5],
+		["cast", "cast", 44, 47, 2, 20.0, false, 0], ["cast_hold", "cast", 44, 47, 6, 14.0, true, 1],
 		["jump", "jump", 54, 64, 8, 12.0, true, 0],
 	]
 	for d in defs:
@@ -104,8 +104,8 @@ func _ready() -> void:
 		if ResourceLoader.exists(DIR % (d[1] + "_back")):
 			Sheets.add(sf, d[0] + "_back", DIR % (d[1] + "_back"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
 			Sheets.add(ef, d[0] + "_back", DIR % (d[1] + "_eyes"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
-	var base := {"idle": Vector3(23, 62, 64), "run": Vector3(25, 62, 64), "hurt": Vector3(23, 62, 64), "death": Vector3(23, 62, 64),
-		"cast": Vector3(28, 45, 44), "cast_hold": Vector3(28, 45, 44), "jump": Vector3(35, 62, 54)}
+	var base := {"idle": Vector3(23, 62, 64), "hurt": Vector3(23, 62, 64), "death": Vector3(23, 62, 64),
+		"cast": Vector3(27, 45, 44), "cast_hold": Vector3(27, 45, 44), "jump": Vector3(35, 62, 54)}
 	for k in base:
 		anchors[k] = base[k]
 		anchors[k + "_back"] = base[k]
@@ -129,6 +129,9 @@ func _ready() -> void:
 func _update_visual(delta: float) -> void:
 	super(delta)
 	visual.position.y -= hover
+	# floating: lean into the drift instead of walking
+	var lean := clampf(velocity.x / SPEED, -1.0, 1.0) * 0.09 * (1.0 if z <= 0.0 else 0.4)
+	visual.skew = lerpf(visual.skew, -lean, 1.0 - exp(-delta * 8.0))
 	eyes.animation = sprite.animation
 	eyes.frame = sprite.frame
 	eyes.flip_h = sprite.flip_h
@@ -145,7 +148,8 @@ func _physics_process(delta: float) -> void:
 	_cast_t -= delta
 	_hurt_t -= delta
 	_iframes -= delta
-	hover = HOVER + sin(_t * 2.2) * 1.2
+	var drift := clampf(velocity.length() / SPEED, 0.0, 1.0)
+	hover = HOVER + drift * 1.5 + sin(_t * (2.2 + drift * 1.4)) * (1.2 + drift * 0.6)
 	if singularity_t > 0.0:
 		singularity_t -= delta
 		if singularity_t <= 0.0:
@@ -252,8 +256,6 @@ func _animate(dir: Vector2) -> void:
 		anim = "cast" if sprite.animation.trim_suffix("_back") == "cast" and sprite.is_playing() else "cast_hold"
 	elif held != null or send_charge >= 0.0 or draw_charge >= 0.0:
 		anim = "cast_hold"
-	elif velocity.length() > 12.0:
-		anim = "run"
 	var name := anim + "_back" if _back and sprite.sprite_frames.has_animation(anim + "_back") else anim
 	if anim == "jump" and jump_charge >= 0.0:
 		play(name)
@@ -264,8 +266,8 @@ func _animate(dir: Vector2) -> void:
 
 
 # ---------- abilities ----------
-func wand_tip() -> Vector2:
-	return global_position + Vector2(WAND_TIP.x * facing, WAND_TIP.y - z - hover)
+func hand_tip() -> Vector2:
+	return global_position + Vector2(HAND_TIP.x * facing, HAND_TIP.y - z - hover)
 
 
 func _pierce() -> void:
@@ -274,7 +276,7 @@ func _pierce() -> void:
 	if aim.x != 0.0:
 		facing = 1 if aim.x > 0 else -1
 	play("cast_back" if _back else "cast", true)
-	var tip := wand_tip()
+	var tip := hand_tip()
 	var target: Vector2 = aim_point if aim_point != null else get_global_mouse_position()
 	var dir := (target - tip).normalized()
 	if dir == Vector2.ZERO:

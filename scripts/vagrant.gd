@@ -36,7 +36,7 @@ func _ready() -> void:
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = sf
 	_sprite.offset = Vector2(0, -16)
-	_sprite.scale = Vector2.ONE * 1.5
+	_sprite.scale = Vector2.ONE
 	_sprite.position = Vector2(0, 1)
 	_sprite.play("idle_down")
 	_sprite.frame = randi() % 4
@@ -79,7 +79,7 @@ func _process(delta: float) -> void:
 	var w := get_tree().get_first_node_in_group("witch") as Node2D
 	if _mumble_t <= 0.0 and not leaving and w and w.global_position.distance_to(global_position) < 240.0:
 		_mumble_t = randf_range(5.0, 11.0)
-		Dialogue.say(self, MUMBLES[randi() % MUMBLES.size()], "", 1.0, Color(0.45, 0.43, 0.5), 30.0, 6)
+		Dialogue.say(self, MUMBLES[randi() % MUMBLES.size()], "", 1.0, Color(0.45, 0.43, 0.5), 32.0, 6)
 		_audio.pitch_scale = randf_range(0.85, 1.15)
 		_audio.play()
 

@@ -301,7 +301,7 @@ static func beam(tip: Vector2, dir: Vector2, length: float) -> void:
 	world.add_child(s)
 	s.play("play")
 	s.animation_finished.connect(s.queue_free)
-	var l := light(s, Color(0.5, 0.95, 0.9), 0.8, 0.8)
+	var l := light(s, Color(0.75, 0.5, 1.0), 0.8, 0.8)
 	l.position = Vector2(44, 0)
 	anim("spark", tip + Vector2(0, 0), 0.8, Color.WHITE, 0.0)
 

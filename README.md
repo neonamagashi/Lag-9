@@ -9,8 +9,8 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 |---|---|
 | WASD | Move (she floats; Shift jumps) |
 | Mouse | Aim (a small rune circles her inner ring showing the direction) |
-| LMB (hold) | Pierce: a beam from her wand toward the cursor, hitting everything along it |
-| RMB | Grab: seize the enemy you're aiming at (any mob; bosses only if her level is at or above theirs) and hold it in front of you. RMB again (label switches to Release): hold to charge, release to fling it where you aim |
+| LMB (hold) | Pierce: she thrusts an open palm and a violet beam fires from it toward the cursor, hitting everything along it |
+| RMB | Grab: seize the enemy you're aiming at (any mob; bosses only if her level is at or above theirs) and hold it in front of you. RMB again (label switches to Release): hold to charge, release to fling it where you aim. While held it's crushed in an invisible fist (taking a little damage) and swings on a spring as you sweep your aim, smacking anything it hits |
 | F (hold, release) | Send: a runic smoke shockwave that pushes every enemy around her outward; impacts with walls or other enemies hurt |
 | T (hold, release) | Draw: the same wave pulled inward, dragging enemies into the crushing rings |
 | R | Rend: lift the 3 nearest enemies and tear them apart |
@@ -24,7 +24,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F1 / F5 | Help / restart |
 
 ## Limbo (Circle 1)
-The game starts here. Black, then a blinding flash: she arrives in a pure white void with only her shadow and a few gravity twinkles. Walking north she meets the souls of Limbo, wandering and mumbling, then a towering shadow-cloaked figure. Press E at its feet to Begin: the souls drift away, her field and abilities awaken, and three waves attack. The whole level has reverb.
+The game starts here. Black, then a blinding flash: she arrives in a pure white void with only her shadow and a few gravity twinkles. She never walks; she floats, leaning into her drift, and turns away (white hair down her back) when heading north. Drifting north she meets the souls of Limbo, wandering and mumbling, then a towering hooded figure whose cloak billows out and spreads across the floor, rippling in a wind. Press E at its feet to Begin: the souls drift away, her field and abilities awaken, and three waves attack. The whole level has reverb.
 
 Placeholder dialogue lives in `assets/dialogue/limbo.json` (edit the lines freely). Voices are babble sounds while text types out.
 
@@ -43,6 +43,12 @@ Three rings, sized from her height (40 px): inner = 1x her height wide, middle =
 
 Tuning lives at the top of `scripts/witch.gd` (abilities and ring sizes) and `scripts/enemy.gd` (enemy stats, per-zone damage, slow, scale, ranged attacks).
 
+## Enemy physics
+
+- Thrown, pushed or pulled enemies fly until friction stops them. Anything they hit gets knocked on, by weight (a rat barely moves a mimic), and both take damage, so chains happen.
+- Enemy projectiles hit whoever is in the way: a skeleton's sword or an eye's bolt will hit an ally, and goblin bombs splash every enemy nearby. A held enemy works as a shield.
+- Enemies try to avoid this: they keep their distance from each other, sidestep instead of shooting through an ally, get out from under falling bombs, and dodge bodies flying their way.
+
 ## Levels
 Maps are built in [Tiled](https://www.mapeditor.org/) and converted with
 `python3 tools/tmx2json.py <map.tmx> assets/maps/<name>.json .`
@@ -58,6 +64,8 @@ The converter repacks animated tiles and marks walls and water solid (platform t
 ## Tests
 - `tests/play_test.tscn` (headless, ruins): every field rule, Rend, teleport, grab and throw, push, pull, jump, bosses and projectiles, then a bot plays all four waves.
 - `tests/limbo_test.tscn` (headless): arrival, the walk north, Begin, and the trial battle.
+- `tests/physics_test.tscn` (headless): grab squeeze and swing, thrown and pushed enemies colliding, friendly fire, line-of-fire sidestepping, dodging bombs.
+- `tests/shots_v4.tscn`: screenshots of floating, the Warden, hand casting and grabbing.
 - `tests/shots_vfx.tscn`: renders screenshots of each effect.
 
 See `CREDITS.md`.
