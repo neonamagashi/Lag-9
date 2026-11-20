@@ -1,116 +1,52 @@
 # Lag 9
 
-A gravity witch descends through the nine circles of hell to get her cat, Whisky, back. Third-person, N64-style, built in Godot 4.7.
+A 2.5D (three-quarter top-down) pixel-art roguelite in Godot 4.7: a gravity witch descending the nine circles of hell to rescue her cat, Whisky. Open this folder in Godot and press F5.
 
-## Run it
-1. Open Godot 4.7, click **Import**, and pick this folder's `project.godot`.
-2. Press **F5** to play.
+The current playable slice is Limbo: the Ancient Ruins sample map, four waves of monsters, and a mimic hiding as a chest.
 
-## Default controls
-Rebind any of these in game: press **Esc**, click a binding, then press a key or mouse button. Bindings save automatically.
-
-| Action | Default |
+## Controls
+| Key | Action |
 |---|---|
-| Move | W A S D |
-| Jump: press again in the air to gravity-jump; hold to charge it higher | Mouse 5 |
-| Fly: double-tap jump while airborne (double-tap again to drop) | Mouse 5 |
-| Rise / descend while flying | hold Mouse 5 / Ctrl |
-| Clamber | jump or push into a ledge up to 2.6 m above your feet |
-| Sprint | Shift |
-| Snap (dodge with i-frames) | Space |
-| Pierce (hold to keep firing) | Mouse L |
-| Send (tap to stagger, hold to charge) | Mouse R |
-| Draw (tap to stagger, hold to charge) | E |
-| Rend (aim at a target) | R |
-| Singularity (costs mana) | G |
-| Flip crush / lift | Q |
-| Field on / off | F |
-| Drink whisky | 1 |
-| Camera | Mouse; scroll to zoom |
+| WASD | Move |
+| Mouse | Aim |
+| LMB (hold) | Pierce: comet bolts |
+| RMB (hold, release) | Send: charged cone blast; enemies hitting walls, ledges or each other take impact damage |
+| E | Draw: yank enemies toward you (into the crushing rings) |
+| R | Rend: lift the 3 nearest enemies and tear them apart (instant kill on light and medium mobs; heavy ones and bosses take big damage) |
+| Space | Snap: teleport (movement direction, or toward the cursor when standing still); stops short of walls and water |
+| Q | Flip the field between Crush and Lift |
+| G | Singularity (60 mana): the field grows 2.4x, everything inside slows, crush doubles, bosses lose their resistance |
+| 1 | Drink whisky (heal) |
+| F1 / F5 | Help / restart |
 
-## Debug keys
-F1 overlay · F2 spawn wave · F3 render scale · F4 clear enemies · `[` `]` witch level · F6 heal · F7 Snap rank · F8 Pierce rank · F9 reset cooldowns and fill mana · F10 Send/Draw rank · F11 Rend rank · F12 Singularity rank
+## The gravity field
+Three rings, sized from her height (37 px): inner = 1x her height wide, middle = 3x, outer = 8x. Gravity works through walls and obstacles.
 
-Enemies marked `*` carry mana and drop an orb when they die. Blue bottles around the arena refill mana and respawn. The roofed room in the far corner is for testing Lift and Singularity ceiling slams.
-
-## Tuning
-All balance and movement numbers live in `data/balance.tres`. Select it in the FileSystem dock and edit the values in the Inspector, grouped by Levels, Gravity Field, Pierce, Snap, Movement, Enemies and Items.
-
-## Models
-Each character has its own folder in `models/`:
-
-| Folder | Game file | Notes |
+| Zone | Crush mode | Lift mode |
 |---|---|---|
-| `witch/` | `witch_rigged.fbx`, `witch_hair.glb`, `staff.glb` | `witch_rigged.fbx` is the auto-rigged body (Mixamo skeleton, 5 ft). The game uses it first; the curly hair is pinned to her Head bone so it follows every animation. `witch_body.glb` is the unrigged fallback. |
-| `gnawling/`, `glutton/`, `acolyte/`, `seer/`, `archer/` | `<name>.glb` (+ `archer/bow.glb`) | Loaded as-is; the game turns, scales and grounds each one at load (sizes live in `scripts/enemy_types.gd`). |
-| `*/rigger/` | FBX zips with quad topology | Hand these to the rigger. Godot ignores these folders. |
-| `source/` | Original high-detail exports | Kept for reference. Godot ignores this folder. |
+| Outer | Slowed more the deeper they go, light damage over time | Slowed |
+| Middle | Barrier: enemies can't walk into it. If she walks onto them they're pinned in a struggling pose (a frame from their death animation) taking heavy damage over time. Heavy enemies (mimic) are slowed instead and can still swing. Flyers are slammed down. | Light and medium enemies float helplessly; flip back to Crush to slam them |
+| Inner | Instant crush | |
 
-Without bones, her hair sways with a vertex shader: it trails her movement, droops in Crush and floats up and out in Lift. Tune it with `split_hair_sway_amount` under Hair & Hat in `balance.tres`.
+- Physical projectiles (goblin bombs, skeleton swords) are crushed at the inner ring and never land. Magical ones (flying eye bolts, mushroom spores) pass through.
+- Bosses (`"boss": true` in an enemy's config) push through the field with reduced damage and aren't held by the barrier, unless Singularity is active.
+- Damage over time shows as purple numbers every 0.5 s.
 
-## Enemies
-| Type | Height | Role |
-|---|---|---|
-| Gnawling | 0.65 m | Fast, fragile swarmer |
-| Glutton | 3.0 m | Slow tank, heavy hits, resists knockback |
-| Acolyte | 1.8 m | Keeps ~9 m away and throws fireballs (physical: her field crushes them) |
-| Seer | 2.3 m, floating | Keeps ~11 m away and throws homing void bolts that pass through her field |
-| Archer | 1.85 m | Keeps ~14 m away and fires fast bone arrows (physical: crushed by the field) |
+Tuning lives at the top of `scripts/witch.gd` (abilities and ring sizes) and `scripts/enemy.gd` (enemy stats, per-zone damage, slow, scale, ranged attacks).
 
-Stats, ranges and cooldowns are in `scripts/enemy_types.gd`. F2 spawns a mixed wave.
+## Levels
+Maps are built in [Tiled](https://www.mapeditor.org/) and converted with
+`python3 tools/tmx2json.py <map.tmx> assets/maps/<name>.json .`
+The converter repacks animated tiles and marks walls and water solid (platform tops and stairs stay walkable). `scripts/tiled_level.gd` builds the tile layers, collision and enemy pathfinding at runtime. The level is chosen by `LEVEL` at the top of `scripts/main.gd`; set it to `""` for the original placeholder dungeon room.
+
+## Tools (Python, in `tools/`)
+- `gen_back_view.py`: back-facing witch frames from the front sheets.
+- `gen_cast_clean.py`: cast frames without the baked-in ground orbs, so effects follow your aim.
+- `gen_sigils.py`: the field's rune ring and seven-point star.
+- `gen_env.py`: placeholder dungeon pixel art.
 
 ## Tests
-`tests/enemy_test.tscn` checks enemy fitting and projectiles with the field on and off. `tests/sim_test.tscn` checks the charged jump, flight, clamber, Send, Draw, Rend and Singularity, and `tests/collision_test.tscn` checks knockback damage. Both print their results. Run it from the editor, or headless with `godot --headless --path . res://tests/sim_test.tscn`.
+- `tests/play_test.tscn` (headless): checks every field rule, Rend, teleport, bosses and projectiles, then a bot plays all four waves.
+- `tests/shots_vfx.tscn`: renders screenshots of each effect.
 
-## Audio
-`audio/sfx` holds placeholder sound effects and `audio/ambient` a looping Limbo drone. All of them were synthesized by `tools/synth_sfx.py` (run `python3 tools/synth_sfx.py audio/sfx`), so there are no licensing strings attached. Replace any file with a real recording of the same name and the game picks it up automatically. Master volume is in the Esc menu.
-
-Code plays sounds by name, for example `Sfx.play("pierce", position)`. Sounds currently hooked up: pierce, snap, whiff, jump_charge, jump_release, flight_on, flip_crush, flip_lift, send, draw, rend, singularity, dodge, witch_hurt, whisky, mana_pickup, enemy_hit, enemy_attack, impact, crush_kill, ui_click.
-
-## Environment assets
-`assets/environment/Ultimate Stylized Nature Pack` (Quaternius, CC0). Only the glTF version is kept. Add new packs the same way: one format plus the license file.
-
-## Animations
-
-`animations/` holds the Universal Animation Library packs (UAL1 + UAL2, about 86 clips). Both packs and the witch rig import through Godot's humanoid retargeting (`animations/retarget/*_bone_map.tres`, set in each file's Advanced Import > Skeleton > Retarget), so any clip plays on her.
-
-To browse them: double-click `UAL1_Standard.glb` or `UAL2_Standard.glb` in the FileSystem dock, open the Animation tab in the import window, and press play on any clip. That previews on the mannequin; in game the same clip drives the witch.
-
-Which clip plays when is the `ANIMS` table at the top of `scripts/witch.gd`. Swap any name there to try a different clip.
-
-| State | Clip |
-|---|---|
-| Float / move | Idle_FoldArms |
-| Lounge (8 s idle) | Sitting_Enter → Sitting_Idle |
-| Jump / airborne / air-jump charge | NinjaJump_Start / NinjaJump_Idle / Crouch_Idle |
-| Flight moving / hovering | Swim_Fwd / Swim_Idle |
-| Clamber | ClimbUp_1m (sped up) |
-| Snap | Shield_Dash (fast) |
-| Pierce | Spell_Simple_Shoot |
-| Send hold / release | Push / OverhandThrow |
-| Draw hold / release | Spell_Simple_Idle / Chest_Open |
-| Rend | Spell_Simple_Enter → Spell_Simple_Idle |
-| Singularity | Chest_Open |
-| Whisky | Consume |
-| Hit | Hit_Chest |
-
-## Art style and the canyon level
-
-The game renders in a Sable-inspired style: flat colour, cool-tinted shadows, ink outlines and hand-drawn linework (sand ripples, rock strata, speckles, cracks) drawn by the shader. Pieces live in `scripts/style.gd` and `shaders/style/`.
-
-- `Style.enabled` (top of `scripts/style.gd`) switches between the Sable look with the canyon level and the old purple arena.
-- F5 toggles the retro filter (240p, dithered colour) on top.
-- Any model loaded through `Style.toonify()` is flattened to a small palette and outlined, so AI Studio models match the world without hand repainting.
-
-The canyon (`models/levels/canyon/`) is generated by `tools/gen_canyon.py`; rerun it after editing layout numbers there. It contains:
-
-| Area | What's there |
-|---|---|
-| Basin (spawn, south) | Dunes, scattered boulders, a climbable boulder stack (1.7 m then 3.7 m), giant ribcage, fallen rune ring, broken pillars, red banners |
-| North cliff | 14 m sheer face; on its east side six 2.2 m terraces you can clamber straight up to the plateau |
-| Cave | Two mouths in the cliff base joined by tunnels through a sunlit chamber; six basalt columns spiral up the chamber wall to a skylight that opens onto the plateau |
-| Plateau (14 m) | Ruined colonnade, wall segments, banners, a mana bottle with a view over the basin |
-| East | A natural rock arch |
-
-Mana bottles: top terrace, cave chamber floor, top of the boulder stack, the plateau, under the rock arch.
-`tests/canyon_test.tscn` checks that every route above is climbable or walkable.
+See `CREDITS.md`.

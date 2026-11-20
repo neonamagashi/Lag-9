@@ -1,112 +1,56 @@
 class_name Projectile
-extends Node3D
+extends Node2D
 
-const SPEEDS := {"fireball": 11.0, "void": 7.0, "arrow": 26.0}
-const COLORS := {"fireball": Color(1.0, 0.5, 0.15), "void": Color(0.45, 0.95, 0.9), "arrow": Color(1.0, 0.25, 0.2)}
+const SPEED := 270.0
+const RANGE := 230.0
+const HEIGHT := 16.0
 
-static var _meshes := {}
-static var stats := {"fired": 0, "crushed": 0, "hit": 0}
-
-var kind := "fireball"
-var velocity := Vector3.ZERO
+var dir := Vector2.RIGHT
 var damage := 10.0
-var physical := true
-var _life := 5.0
-var _t := 0.0
-var _body: Node3D
+var _travelled := 0.0
+var _sprite: AnimatedSprite2D
 
 
-func launch(k: String, from: Vector3, target: Vector3, dmg: float) -> Projectile:
-	kind = k
+func setup(pos: Vector2, d: Vector2, dmg: float) -> void:
+	position = pos
+	dir = d
 	damage = dmg
-	physical = kind != "void"
-	velocity = (target - from).normalized() * SPEEDS.get(kind, 10.0)
-	return self
 
 
 func _ready() -> void:
-	add_to_group("projectiles")
-	stats["fired"] += 1
-	_build()
-	if kind == "arrow" and velocity.length() > 0.01:
-		look_at(global_position + velocity, Vector3.UP if absf(velocity.normalized().y) < 0.95 else Vector3.RIGHT)
-
-
-func _build() -> void:
-	if _meshes.is_empty():
-		var orb := SphereMesh.new()
-		orb.radius = 0.18
-		orb.height = 0.36
-		orb.radial_segments = 8
-		orb.rings = 4
-		var shaft := BoxMesh.new()
-		shaft.size = Vector3(0.04, 0.04, 0.75)
-		var tip := BoxMesh.new()
-		tip.size = Vector3(0.08, 0.08, 0.12)
-		_meshes = {"orb": orb, "shaft": shaft, "tip": tip}
-	_body = Node3D.new()
-	add_child(_body)
-	var c: Color = COLORS.get(kind, Color.WHITE)
-	match kind:
-		"arrow":
-			Art.mesh(_meshes.shaft, Art.mat(Color(0.86, 0.82, 0.72)), Vector3.ZERO, _body)
-			Art.mesh(_meshes.tip, Art.glow(c, 1.0), Vector3(0, 0, -0.42), _body)
-		"void":
-			Art.mesh(_meshes.orb, Art.glow(Color(0.3, 0.1, 0.5), 1.0), Vector3.ZERO, _body)
-			var halo := Art.mesh(_meshes.orb, Art.glow(c, 0.6), Vector3.ZERO, _body)
-			halo.scale = Vector3.ONE * 1.6
-		_:
-			Art.mesh(_meshes.orb, Art.glow(c, 1.0), Vector3.ZERO, _body)
-			var core := Art.mesh(_meshes.orb, Art.glow(Color(1.0, 0.9, 0.5), 1.0), Vector3.ZERO, _body)
-			core.scale = Vector3.ONE * 0.55
+	_sprite = AnimatedSprite2D.new()
+	_sprite.sprite_frames = Fx.frames("comet")
+	_sprite.position = Vector2(0, -HEIGHT)
+	_sprite.rotation = Vector2(dir.x, dir.y * 0.8).angle()
+	add_child(_sprite)
+	_sprite.play("play")
+	_sprite.animation_finished.connect(func(): _sprite.frame = 2; _sprite.play("play"))
+	var l := Fx.light(self, Color(0.45, 0.95, 0.9), 0.5, 1.0)
+	l.position = Vector2(0, -HEIGHT)
 
 
 func _physics_process(delta: float) -> void:
-	var w := Game.witch
-	var dt := delta * Game.enemy_time_scale
-	_life -= dt
-	_t += dt
-	if _life <= 0.0 or not w:
-		queue_free()
-		return
-	if kind == "void":
-		var want := (w.field_center() - global_position).normalized() * float(SPEEDS["void"])
-		velocity = velocity.slerp(want, minf(1.0, 0.9 * dt))
-		_body.scale = Vector3.ONE * (1.0 + sin(_t * 12.0) * 0.15)
-	elif kind == "fireball":
-		_body.rotation += Vector3(4, 6, 0) * dt
-	var next := global_position + velocity * dt
-	var q := PhysicsRayQueryParameters3D.create(global_position, next, 1)
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var step := dir * SPEED * delta
+	var q := PhysicsRayQueryParameters2D.create(global_position, global_position + step, 1)
+	var hit := get_world_2d().direct_space_state.intersect_ray(q)
 	if hit:
-		_pop(hit.position, "projectile_crushed", -6.0)
+		_pop(hit.position)
 		return
-	global_position = next
-	if kind == "arrow" and velocity.length() > 0.01:
-		look_at(global_position + velocity, Vector3.UP if absf(velocity.normalized().y) < 0.95 else Vector3.RIGHT)
-	var dist := global_position.distance_to(w.field_center())
-	if physical and w.field_on and dist < w.field_radius():
-		_crushed(w)
-		return
-	if dist < 0.75:
-		stats["hit"] += 1
-		w.take_damage(damage, "projectile")
-		_pop(global_position, "impact", -4.0)
+	global_position += step
+	_travelled += step.length()
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.dead or e.dormant:
+			continue
+		var d: Vector2 = e.global_position + Vector2(0, -e.z) - global_position
+		if absf(d.x) < e.hit_radius + 3.0 and absf(d.y + e.body_height * 0.5 - HEIGHT * 0.5) < e.body_height * 0.6 + 4.0:
+			e.hit(damage, dir * 60.0)
+			Fx.anim("cross", global_position, 0.55, Color.WHITE, HEIGHT)
+			queue_free()
+			return
+	if _travelled > RANGE:
+		_pop(global_position)
 
 
-func _crushed(w: Witch) -> void:
-	var c: Color = COLORS.get(kind, Color.WHITE)
-	if w.field_mode == Witch.FieldMode.LIFT:
-		Art.ring_pulse(get_parent(), global_position, Witch.LIFT_COLOR, 0.8, 0.25)
-	else:
-		Art.ring_pulse(get_parent(), global_position, Witch.CRUSH_COLOR, 0.8, 0.25)
-	Art.burst(get_parent(), global_position, c, 16)
-	Sfx.play("projectile_crushed", global_position, 0.1, -3.0)
-	stats["crushed"] += 1
-	queue_free()
-
-
-func _pop(pos: Vector3, sound: String, vol: float) -> void:
-	Art.burst(get_parent(), pos, COLORS.get(kind, Color.WHITE), 12)
-	Sfx.play(sound, pos, 0.1, vol)
+func _pop(p: Vector2) -> void:
+	Fx.anim("spark", p, 1.0, Color.WHITE, HEIGHT)
 	queue_free()

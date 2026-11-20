@@ -1,190 +1,108 @@
 class_name Hud
 extends CanvasLayer
 
-const ABILITIES := [
-	["pierce", "Pierce"],
-	["snap", "Snap"],
-	["send", "Send"],
-	["draw", "Draw"],
-	["rend", "Rend"],
-	["singularity", "Singularity"],
-]
+const SLOTS := [["pierce", "LMB", "Pierce"], ["send", "RMB", "Send"], ["draw", "E", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["singularity", "G", "Sing."]]
+const MAX_CD := {"pierce": Witch.PIERCE_CD, "send": Witch.SEND_CD, "draw": Witch.DRAW_CD, "rend": Witch.REND_CD, "snap": Witch.SNAP_CD, "singularity": Witch.SING_CD}
+const INK := Color(0.07, 0.05, 0.09)
+const HELP := "WASD move    LMB Pierce    RMB hold Send    E Draw    R Rend\nSpace Snap (teleport)    Q flip Crush/Lift    G Singularity    1 Whisky    F1 help    F5 restart"
 
-var _hp_bar: ProgressBar
-var _mana_bar: ProgressBar
-var _mana_text: Label
-var _hp_text: Label
-var _whisky: Label
-var _field: Label
-var _level: Label
-var _toast: Label
-var _toast_t := 0.0
-var _ability_labels := {}
+var witch: Witch
+var main: Node
+var help := true
+var _canvas: Control
+var _banner_t := 0.0
+var _banner := ["", ""]
+var _help_t := 7.0
+var _help_auto := true
 
 
 func _ready() -> void:
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
-
-	var cross := Label.new()
-	cross.text = "+"
-	cross.add_theme_font_size_override("font_size", 26)
-	cross.add_theme_color_override("font_color", Color(1, 0.92, 0.75, 0.9))
-	cross.add_theme_constant_override("outline_size", 6)
-	cross.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	cross.set_anchors_preset(Control.PRESET_CENTER)
-	cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	cross.position -= Vector2(8, 16)
-	root.add_child(cross)
-
-	var bottom := VBoxContainer.new()
-	bottom.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	bottom.position = Vector2(28, -200)
-	bottom.add_theme_constant_override("separation", 6)
-	root.add_child(bottom)
-	_field = _label(24)
-	bottom.add_child(_field)
-	_hp_bar = ProgressBar.new()
-	_hp_bar.custom_minimum_size = Vector2(320, 22)
-	_hp_bar.show_percentage = false
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.08, 0.06, 0.12, 0.85)
-	bg.set_border_width_all(2)
-	bg.border_color = Color(0.9, 0.72, 0.3)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(0.8, 0.22, 0.28)
-	_hp_bar.add_theme_stylebox_override("background", bg)
-	_hp_bar.add_theme_stylebox_override("fill", fill)
-	bottom.add_child(_hp_bar)
-	_hp_text = _label(18)
-	bottom.add_child(_hp_text)
-	_mana_bar = ProgressBar.new()
-	_mana_bar.custom_minimum_size = Vector2(320, 14)
-	_mana_bar.show_percentage = false
-	var mfill := StyleBoxFlat.new()
-	mfill.bg_color = Witch.MANA_COLOR
-	_mana_bar.add_theme_stylebox_override("background", bg)
-	_mana_bar.add_theme_stylebox_override("fill", mfill)
-	bottom.add_child(_mana_bar)
-	_mana_text = _label(16)
-	bottom.add_child(_mana_text)
-	_whisky = _label(20)
-	bottom.add_child(_whisky)
-
-	var abil := HBoxContainer.new()
-	abil.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	abil.position = Vector2(-330, -100)
-	abil.add_theme_constant_override("separation", 14)
-	root.add_child(abil)
-	for a in ABILITIES:
-		var l := _label(17)
-		l.custom_minimum_size = Vector2(100, 0)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		abil.add_child(l)
-		_ability_labels[a[0]] = l
-
-	_level = _label(22)
-	_level.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_level.position = Vector2(-120, 18)
-	_level.custom_minimum_size = Vector2(240, 0)
-	_level.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(_level)
-
-	_toast = _label(24)
-	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_toast.position = Vector2(-300, 60)
-	_toast.custom_minimum_size = Vector2(600, 0)
-	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast.add_theme_color_override("font_color", Color(1, 0.85, 0.45))
-	root.add_child(_toast)
+	_canvas = Control.new()
+	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_canvas.draw.connect(_draw_hud)
+	add_child(_canvas)
 
 
-func connect_witch(w: Witch) -> void:
-	w.toast.connect(show_toast)
-	w.hp_changed.connect(_on_hp)
-	_on_hp(w.hp, Game.witch_max_hp())
-
-
-func show_toast(text: String) -> void:
-	_toast.text = text
-	_toast_t = 2.2
-	_toast.modulate.a = 1.0
-
-
-func _on_hp(hp: float, max_hp: float) -> void:
-	_hp_bar.max_value = max_hp
-	_hp_bar.value = maxf(0.0, hp)
-	_hp_text.text = "%d / %d" % [int(maxf(0.0, hp)), int(max_hp)]
+func banner(title: String, sub: String) -> void:
+	_banner = [title, sub]
+	_banner_t = 2.5 if sub == "" else 9999.0
 
 
 func _process(delta: float) -> void:
-	var w := Game.witch
-	if not w:
+	_banner_t -= delta
+	_help_t -= delta
+	if _help_auto and _help_t < 0.0:
+		help = false
+		_help_auto = false
+	_canvas.queue_redraw()
+
+
+func _text(pos: Vector2, s: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0) -> void:
+	var f := ThemeDB.fallback_font
+	if align == HORIZONTAL_ALIGNMENT_RIGHT and width <= 0.0:
+		pos.x -= f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		align = HORIZONTAL_ALIGNMENT_LEFT
+		width = -1.0
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		_canvas.draw_string(f, pos + o, s, align, width, size, INK)
+	_canvas.draw_string(f, pos, s, align, width, size, color)
+
+
+func _bar(pos: Vector2, size: Vector2, k: float, color: Color) -> void:
+	_canvas.draw_rect(Rect2(pos - Vector2(1, 1), size + Vector2(2, 2)), INK)
+	_canvas.draw_rect(Rect2(pos, size), Color(0.18, 0.15, 0.22))
+	_canvas.draw_rect(Rect2(pos, Vector2(size.x * clampf(k, 0, 1), size.y)), color)
+	_canvas.draw_rect(Rect2(pos, Vector2(size.x * clampf(k, 0, 1), 1)), color.lightened(0.35))
+
+
+func _draw_hud() -> void:
+	if not witch:
 		return
-	_toast_t -= delta
-	_toast.modulate.a = clampf(_toast_t / 0.5, 0.0, 1.0)
-	if not w.field_on:
-		_field.text = "FIELD: OFF  [%s]" % Controls.label("toggle_field")
-		_field.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
-	elif w.field_mode == Witch.FieldMode.CRUSH:
-		_field.text = "FIELD: CRUSH  [%s]" % Controls.label("flip_gravity")
-		_field.add_theme_color_override("font_color", Witch.CRUSH_COLOR)
-	else:
-		_field.text = "FIELD: LIFT  [%s]" % Controls.label("flip_gravity")
-		_field.add_theme_color_override("font_color", Witch.LIFT_COLOR)
-	_whisky.text = "Whisky x%d  [%s]%s" % [w.whisky, Controls.label("drink_whisky"), "     FLYING" if w.flying else ""]
-	_mana_bar.max_value = Game.balance.max_mana
-	_mana_bar.value = w.mana
-	_mana_text.text = "Mana %d / %d" % [int(w.mana), int(Game.balance.max_mana)]
-	_level.text = "Witch LV %d   ·   %d defeated" % [Game.balance.witch_level, Game.kills]
-	var b := Game.balance
-	for a in ABILITIES:
-		var l: Label = _ability_labels[a[0]]
-		var key := Controls.label(a[0])
-		var status := "ready"
-		var dim := false
-		match a[0]:
-			"pierce":
-				dim = w.pierce_cd > 0.05
-				status = "%.1fs" % w.pierce_cd if dim else "ready"
-			"snap":
-				dim = w.snap_cd > 0.05
-				status = "%.1fs" % w.snap_cd if dim else "ready"
-			"send":
-				if w.send_charge >= 0.0:
-					status = "%d%%" % int(w.send_charge / b.send_max_charge * 100.0)
-				else:
-					dim = w.send_cd > 0.05
-					status = "%.1fs" % w.send_cd if dim else "ready"
-			"draw":
-				if w.draw_charge >= 0.0:
-					status = "%d%%" % int(w.draw_charge / b.draw_max_charge * 100.0)
-				else:
-					dim = w.draw_cd > 0.05
-					status = "%.1fs" % w.draw_cd if dim else "ready"
-			"rend":
-				dim = w.rend_cd > 0.05
-				status = "%ds" % ceili(w.rend_cd) if dim else "ready"
-			"singularity":
-				if w.singularity_t > 0.0:
-					status = "ACTIVE %.1fs" % w.singularity_t
-				elif w.singularity_cd > 0.05:
-					dim = true
-					status = "%ds" % ceili(w.singularity_cd)
-				elif w.mana < b.singularity_mana_cost:
-					dim = true
-					status = "%d mana" % int(b.singularity_mana_cost)
-		l.text = "%s\n[%s]\n%s" % [a[1], key, status]
-		l.modulate = Color(1, 1, 1, 0.5 if dim else 1.0)
-
-
-func _label(size: int) -> Label:
-	var l := Label.new()
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_constant_override("outline_size", 6)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return l
+	var vs := _canvas.size
+	_bar(Vector2(8, 8), Vector2(84, 6), witch.hp / witch.max_hp, Color(0.85, 0.3, 0.38))
+	_bar(Vector2(8, 18), Vector2(84, 4), witch.mana / 100.0, Color(0.36, 0.8, 0.78))
+	_text(Vector2(96, 15), "%d" % ceil(witch.hp), 8, Color(1, 0.9, 0.9))
+	for i in witch.whisky:
+		var p := Vector2(9 + i * 8, 26)
+		_canvas.draw_rect(Rect2(p + Vector2(1, 3), Vector2(5, 6)), Color(0.6, 0.36, 0.16))
+		_canvas.draw_rect(Rect2(p + Vector2(2, 0), Vector2(3, 3)), Color(0.5, 0.3, 0.12))
+		_canvas.draw_rect(Rect2(p + Vector2(2, 5), Vector2(3, 2)), Color(0.9, 0.82, 0.72))
+	_text(Vector2(10 + witch.whisky * 8, 34), "[1]", 7, Color(0.8, 0.75, 0.7))
+	var mode := "CRUSH" if witch.mode == Witch.Mode.CRUSH else "LIFT"
+	var mc := Witch.CRUSH_COLOR if witch.mode == Witch.Mode.CRUSH else Witch.LIFT_COLOR
+	_text(Vector2(vs.x - 8, 15), "Field: %s  [Q]" % mode, 8, mc, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	if main.wave >= 0:
+		_text(Vector2(vs.x - 8, 26), "Wave %d/%d" % [main.wave + 1, main.WAVES.size()], 8, Color(0.9, 0.85, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	var sw := 30.0
+	var x0 := vs.x / 2.0 - SLOTS.size() * (sw + 3) / 2.0
+	for i in SLOTS.size():
+		var s: Array = SLOTS[i]
+		var r := Rect2(x0 + i * (sw + 3), vs.y - 26, sw, 20)
+		var cd: float = witch.cooldowns[s[0]]
+		var ready: bool = cd <= 0.0 and (s[0] != "singularity" or witch.mana >= Witch.SING_COST)
+		_canvas.draw_rect(r.grow(1), INK)
+		_canvas.draw_rect(r, Color(0.2, 0.17, 0.26) if ready else Color(0.12, 0.1, 0.15))
+		if cd > 0.0:
+			var k: float = cd / MAX_CD[s[0]]
+			_canvas.draw_rect(Rect2(r.position + Vector2(0, r.size.y * (1.0 - k)), Vector2(r.size.x, r.size.y * k)), Color(0.05, 0.04, 0.07, 0.75))
+		if s[0] == "send" and witch.send_charge >= 0.0:
+			_canvas.draw_rect(Rect2(r.position, Vector2(r.size.x * witch.send_charge / Witch.SEND_MAX_CHARGE, 2)), Color(0.75, 0.65, 1.0))
+		var tc := Color(0.75, 1.0, 0.95) if ready else Color(0.5, 0.48, 0.55)
+		_text(r.position + Vector2(0, 9), s[2], 7, tc, HORIZONTAL_ALIGNMENT_CENTER, sw)
+		_text(r.position + Vector2(0, 18), s[1], 6, Color(0.7, 0.65, 0.75), HORIZONTAL_ALIGNMENT_CENTER, sw)
+	if witch.singularity_t > 0.0:
+		_bar(Vector2(vs.x / 2.0 - 40, vs.y - 32), Vector2(80, 2), witch.singularity_t / Witch.SING_TIME, Witch.CRUSH_COLOR)
+	if _banner_t > 0.0:
+		var a := clampf(_banner_t, 0.0, 1.0)
+		_text(Vector2(0, vs.y * 0.36), _banner[0], 16, Color(0.9, 0.85, 1.0, a), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		if _banner[1] != "":
+			_text(Vector2(0, vs.y * 0.36 + 14), _banner[1], 8, Color(0.8, 0.8, 0.85, a), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	if witch.dead:
+		_text(Vector2(0, vs.y * 0.4), "Whisky waits", 16, Color(1.0, 0.6, 0.6), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.4 + 14), "F5 to try again", 8, Color(0.85, 0.8, 0.85), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	if help:
+		var lines := HELP.split("\n")
+		_canvas.draw_rect(Rect2(0, vs.y - 58, vs.x, 26), Color(0.05, 0.04, 0.07, 0.6))
+		for i in lines.size():
+			_text(Vector2(0, vs.y - 48 + i * 10), lines[i], 7, Color(0.85, 0.82, 0.9), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
