@@ -5,11 +5,13 @@ const SIGIL_OUTER := preload("res://assets/vfx/sigil_outer.png")
 const SIGIL_MID := preload("res://assets/vfx/sigil_mid.png")
 const ZONE_COUNTS := [60, 90, 64]
 const STAR_COLORS := [Color(0.96, 0.94, 1.0), Color(0.78, 0.7, 1.0), Color(0.6, 0.95, 0.92)]
+const STAR_COLORS_DARK := [Color(0.2, 0.17, 0.28), Color(0.4, 0.3, 0.6), Color(0.3, 0.45, 0.5)]
 
 var witch: Witch
 var _stars := []
 var _t := 0.0
 var _pulse := 0.0
+var _reveal := 1.0
 
 
 func _ready() -> void:
@@ -41,7 +43,8 @@ func _respawn(s: Dictionary, anywhere := false) -> void:
 	s.rise = 0.0
 	s.big = randf() < (0.08 if s.zone == 2 else 0.16)
 	var roll := randf()
-	s.color = STAR_COLORS[0] if roll < 0.7 else (STAR_COLORS[1] if roll < 0.92 else STAR_COLORS[2])
+	var pal: Array = STAR_COLORS_DARK if Fx.dark_world else STAR_COLORS
+	s.color = pal[0] if roll < 0.7 else (pal[1] if roll < 0.92 else pal[2])
 
 
 func _process(delta: float) -> void:
@@ -49,6 +52,7 @@ func _process(delta: float) -> void:
 		visible = false
 		return
 	_t += delta
+	_reveal = move_toward(_reveal, 1.0 if witch.field_active else 0.0, delta * 0.8)
 	_pulse = fmod(_pulse + delta / 1.8, 1.0)
 	var lift := witch.mode == Witch.Mode.LIFT
 	var sing := witch.singularity_t > 0.0
@@ -87,20 +91,36 @@ func _draw() -> void:
 	var r_mid := Witch.R_MID * k
 	var r_in := Witch.R_INNER * k
 	var shade := Color(0.03, 0.02, 0.05)
+	var rv := _reveal
+	if rv > 0.01:
+		_draw_zones(k, sing, lift, r_out, r_mid, r_in, shade, rv)
+	_draw_stars(lift, rv)
+	if witch.abilities_enabled and rv > 0.5:
+		_draw_aim(r_in)
+
+
+func _draw_zones(k: float, sing: bool, lift: bool, r_out: float, r_mid: float, r_in: float, shade: Color, rv: float) -> void:
 	for i in 4:
-		draw_colored_polygon(_ellipse(r_out * (1.0 - i * 0.025)), Color(shade, 0.045 + (0.03 if sing else 0.0)))
+		draw_colored_polygon(_ellipse(r_out * (1.0 - i * 0.025)), Color(shade, (0.045 + (0.03 if sing else 0.0)) * rv))
 	for i in 3:
-		draw_colored_polygon(_ellipse(r_mid * (1.0 - i * 0.04)), Color(shade, 0.09 + (0.04 if sing else 0.0)))
+		draw_colored_polygon(_ellipse(r_mid * (1.0 - i * 0.04)), Color(shade, (0.09 + (0.04 if sing else 0.0)) * rv))
 	for i in 3:
-		draw_colored_polygon(_ellipse(r_in * (1.0 - i * 0.12)), Color(0.0, 0.0, 0.0, 0.4))
-	var line := Color(0.62, 0.56, 0.8, 0.32) if not lift else Color(0.9, 0.78, 0.5, 0.32)
+		draw_colored_polygon(_ellipse(r_in * (1.0 - i * 0.12)), Color(0.0, 0.0, 0.0, 0.4 * rv))
+	var line := Color(0.62, 0.56, 0.8, 0.32 * rv) if not lift else Color(0.9, 0.78, 0.5, 0.32 * rv)
+	if Fx.dark_world:
+		line = Color(0.3, 0.25, 0.42, 0.45 * rv) if not lift else Color(0.55, 0.42, 0.15, 0.45 * rv)
 	var spin := _t * (0.12 if not lift else -0.12) * (2.0 if sing else 1.0)
 	_sigil(SIGIL_OUTER, r_out, spin, line)
 	_sigil(SIGIL_MID, r_mid, -spin * 1.7, Color(line, line.a * 1.15))
 	var p := _pulse if lift else 1.0 - _pulse
 	var pr := lerpf(r_in, r_out, p)
-	draw_polyline(_ellipse(pr, 64) + PackedVector2Array([_ellipse(pr, 64)[0]]), Color(line, 0.35 * sin(p * PI)), 1.0)
+	draw_polyline(_ellipse(pr, 64) + PackedVector2Array([_ellipse(pr, 64)[0]]), Color(line, 0.35 * sin(p * PI) * rv), 1.0)
+
+
+func _draw_stars(lift: bool, rv: float) -> void:
 	for s in _stars:
+		if rv < 0.5 and s.zone == 2:
+			continue
 		var b := _bounds(s.zone)
 		var edge := clampf((b.y - s.r) / (b.y * 0.12), 0.0, 1.0) if not lift else clampf(1.0 - s.rise / 26.0, 0.0, 1.0)
 		var tw := pow(maxf(0.0, sin(s.phase + _t * s.rate)), 2.0)
@@ -116,6 +136,21 @@ func _draw() -> void:
 			draw_rect(Rect2(pos + Vector2(0, -1), Vector2(1, 3)), c)
 		else:
 			draw_rect(Rect2(pos, Vector2(1, 1)), c)
+
+
+func _draw_aim(r_in: float) -> void:
+	var d := witch.aim
+	var t := r_in / Vector2(d.x, d.y / Witch.ELLIPSE).length() + 7.0
+	var p := d * t
+	var out := d
+	var side := Vector2(-d.y, d.x)
+	var c := Color(0.82, 0.72, 1.0, 0.9) if not Fx.dark_world else Color(0.35, 0.22, 0.6, 0.95)
+	var pulse := 0.7 + 0.3 * sin(_t * 6.0)
+	draw_line(p - out * 4.0, p + out * 4.0, Color(c, c.a * pulse), 1.0)
+	draw_line(p + out * 4.0, p + out * 1.0 + side * 3.0, Color(c, c.a * pulse), 1.0)
+	draw_line(p + out * 4.0, p + out * 1.0 - side * 3.0, Color(c, c.a * pulse), 1.0)
+	draw_line(p - out * 1.0 + side * 2.0, p - out * 3.0 + side * 4.0, Color(c, c.a * 0.6 * pulse), 1.0)
+	draw_line(p - out * 1.0 - side * 2.0, p - out * 3.0 - side * 4.0, Color(c, c.a * 0.6 * pulse), 1.0)
 
 
 func _sigil(tex: Texture2D, r: float, rot: float, color: Color) -> void:

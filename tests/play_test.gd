@@ -5,6 +5,7 @@ var w: Witch
 
 
 func _ready() -> void:
+	Game.level_choice = "ruins"
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 	w = main.witch
@@ -113,6 +114,66 @@ func _mechanics() -> void:
 	await _press("snap", 2)
 	Input.action_release("move_left")
 	print("teleport toward water/wall: moved %.0f px, now on open tile %s" % [w.global_position.distance_to(s2), main.level.open_at(w.global_position)])
+	await _clear()
+
+	var gob := await _enemy("goblin", Vector2(100, 0))
+	gob._shot_cfg = {}
+	w.aim_point = gob.global_position
+	await _press("grab")
+	await _frames(20)
+	var held_ok := w.held == gob and gob.grabbed
+	var hold_d := gob.global_position.distance_to(w.hold_point())
+	w.aim_point = w.global_position + Vector2(-200, 0)
+	await _frames(20)
+	var followed := gob.global_position.x < w.global_position.x
+	Input.action_press("grab")
+	await _frames(40)
+	Input.action_release("grab")
+	await _frames(3)
+	var vel := gob.velocity.length()
+	await _frames(40)
+	print("grab: held %s (%.0f px from hold point), follows aim %s, release speed %.0f, label now %s, goblin hp %.0f/%.0f" % [held_ok, hold_d, followed, vel, "Release" if w.held else "Grab", gob.hp, gob.max_hp])
+	w.aim_point = null
+	await _clear()
+
+	var ring := []
+	for a in 6:
+		ring.append(await _enemy("rat", Vector2.RIGHT.rotated(a * TAU / 6) * Vector2(70, 40)))
+	var d0: Array = ring.map(func(e): return w.field_dist(e.global_position))
+	Input.action_press("send")
+	await _frames(30)
+	Input.action_release("send")
+	await _frames(20)
+	var d1: Array = ring.map(func(e): return int(w.field_dist(e.global_position)) if is_instance_valid(e) else -1)
+	print("push (F, radial): distances %s -> %s" % [d0.map(func(x): return int(x)), d1])
+	await _clear()
+	var far := []
+	for a in 4:
+		far.append(await _enemy("goblin", Vector2.RIGHT.rotated(a * TAU / 4 + 0.4) * Vector2(150, 90)))
+	for e in far:
+		e._shot_cfg = {}
+	var f0: Array = far.map(func(e): return int(w.field_dist(e.global_position)))
+	Input.action_press("draw")
+	await _frames(30)
+	Input.action_release("draw")
+	await _frames(25)
+	var f1: Array = far.map(func(e): return int(w.field_dist(e.global_position)) if is_instance_valid(e) and not e.dead else -1)
+	print("pull (T, radial): distances %s -> %s (-1 = crushed)" % [f0, f1])
+	await _clear()
+
+	w.global_position = Vector2(13.5, 11.5) * 32
+	await _frames(5)
+	var y0 := w.global_position.y
+	Input.action_press("move_down")
+	Input.action_press("jump")
+	await _frames(30)
+	Input.action_release("jump")
+	var peak := 0.0
+	for i in 90:
+		await get_tree().physics_frame
+		peak = maxf(peak, w.z)
+	Input.action_release("move_down")
+	print("jump down off the ledge: peak %.0f px, moved %.0f px south, landed on open tile %s" % [peak, w.global_position.y - y0, main.level.open_at(w.global_position)])
 	await _clear()
 
 	var bossy := await _enemy("skeleton", Vector2(120, 0), true)

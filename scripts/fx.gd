@@ -23,6 +23,25 @@ const ANIMS := {
 static var world: Node2D
 static var _anim_frames := {}
 static var _splats: Array[ImageTexture] = []
+static var _beam: SpriteFrames
+static var dark_world := false
+static var _soft: Texture2D
+
+
+static func soft() -> Texture2D:
+	if not _soft:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 16
+		t.height = 16
+		_soft = t
+	return _soft
 static var camera: Camera2D
 static var _shake := 0.0
 static var _spikes: SpriteFrames
@@ -250,7 +269,8 @@ static func smoke(pos: Vector2, n: int, size: float) -> void:
 	ramp.set_color(0, Color(0.04, 0.02, 0.06, 0.85))
 	ramp.add_point(0.5, Color(0.12, 0.08, 0.16, 0.5))
 	ramp.set_color(ramp.get_point_count() - 1, Color(0.2, 0.15, 0.25, 0.0))
-	var p := _particles(pos + Vector2(0, -12), n, 0.9, Vector2(8, 30) * size, Vector2(0, -26), Vector2(2.0, 4.5) * size, ramp, 6)
+	var p := _particles(pos + Vector2(0, -12), n, 0.9, Vector2(8, 30) * size, Vector2(0, -26), Vector2(0.3, 0.6) * size, ramp, 6)
+	p.texture = soft()
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = 6.0 * size
 	var sparks := Gradient.new()
@@ -263,3 +283,175 @@ static func black_hole(pos: Vector2, size: float) -> void:
 	anim("vortex", pos, size, Color(0.08, 0.04, 0.12, 0.95), 0.0, 0.6, -1)
 	anim("vortex", pos, size * 0.6, Color(0.0, 0.0, 0.0, 0.9), 10.0, 0.8, 6)
 	smoke(pos, int(10 + 18 * size), size)
+
+
+static func beam(tip: Vector2, dir: Vector2, length: float) -> void:
+	if not _beam:
+		_beam = SpriteFrames.new()
+		_beam.remove_animation("default")
+		Sheets.add(_beam, "play", "res://assets/witch_white/beam.png", 88, 47, 6, 18.0, false, true)
+	var s := AnimatedSprite2D.new()
+	s.sprite_frames = _beam
+	s.centered = false
+	s.offset = Vector2(0, -23)
+	s.position = tip
+	s.rotation = dir.angle()
+	s.scale = Vector2(length / 88.0, 1.0)
+	s.z_index = 8
+	world.add_child(s)
+	s.play("play")
+	s.animation_finished.connect(s.queue_free)
+	var l := light(s, Color(0.5, 0.95, 0.9), 0.8, 0.8)
+	l.position = Vector2(44, 0)
+	anim("spark", tip + Vector2(0, 0), 0.8, Color.WHITE, 0.0)
+
+
+static func _smoke_ramp(dark: Color, light_c: Color) -> Gradient:
+	var g := Gradient.new()
+	g.set_color(0, Color(dark, 0.0))
+	g.add_point(0.15, Color(dark, 0.85))
+	g.add_point(0.6, Color(light_c, 0.45))
+	g.set_color(g.get_point_count() - 1, Color(light_c, 0.0))
+	return g
+
+
+static func wave(pos: Vector2, r0: float, r1: float, time: float, inward: bool) -> void:
+	var n := Node2D.new()
+	n.position = pos
+	n.z_index = 4
+	world.add_child(n)
+	var blobs := []
+	for i in 56:
+		blobs.append({"a": i / 56.0 * TAU + randf_range(-0.05, 0.05), "j": randf_range(-4, 4), "s": randf_range(1.5, 3.5), "rune": i % 7 == 0})
+	var stars := []
+	for i in 30:
+		stars.append({"a": randf() * TAU, "j": randf_range(-8, 8), "p": randf() * TAU})
+	var state := {"k": 0.0}
+	n.draw.connect(func():
+		var k: float = state.k
+		var r := lerpf(r0, r1, ease(k, 0.6 if not inward else 1.8))
+		var a := sin(k * PI) * 0.95
+		for b in blobs:
+			var rr: float = r + b.j * (0.4 + k)
+			var p := Vector2(cos(b.a) * rr, sin(b.a) * rr * Witch.ELLIPSE)
+			n.draw_circle(p, b.s * (1.0 + k * 0.6), Color(0.06, 0.04, 0.09, a * 0.55))
+			if b.rune:
+				var t := Vector2(-sin(b.a), cos(b.a) * Witch.ELLIPSE).normalized() * 3.0
+				var o := Vector2(cos(b.a), sin(b.a) * Witch.ELLIPSE) * 3.0
+				n.draw_line(p - o, p + o, Color(0.75, 0.68, 0.95, a), 1.0)
+				n.draw_line(p, p + t + o * 0.5, Color(0.75, 0.68, 0.95, a), 1.0)
+		for st in stars:
+			var tw := pow(maxf(0.0, sin(st.p + k * 18.0)), 2.0)
+			var rr: float = r + st.j
+			var p := Vector2(cos(st.a) * rr, sin(st.a) * rr * Witch.ELLIPSE)
+			var c := Color(0.15, 0.1, 0.25) if dark_world else Color(0.95, 0.92, 1.0)
+			n.draw_rect(Rect2(p, Vector2(1, 1)), Color(c, a * tw)))
+	var tw := n.create_tween()
+	tw.tween_method(func(v: float):
+		state.k = v
+		n.queue_redraw(), 0.0, 1.0, time)
+	tw.tween_callback(n.queue_free)
+
+
+static func implode(pos: Vector2) -> void:
+	var p := CPUParticles2D.new()
+	p.position = pos + Vector2(0, -16)
+	p.amount = 34
+	p.one_shot = true
+	p.explosiveness = 0.85
+	p.lifetime = 0.45
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE_SURFACE
+	p.emission_sphere_radius = 22.0
+	p.scale = Vector2(1.0, 0.8)
+	p.radial_accel_min = -420.0
+	p.radial_accel_max = -320.0
+	p.initial_velocity_min = 0.0
+	p.initial_velocity_max = 10.0
+	p.gravity = Vector2.ZERO
+	p.texture = soft()
+	p.scale_amount_min = 0.35
+	p.scale_amount_max = 0.7
+	p.color_ramp = _smoke_ramp(Color(0.03, 0.02, 0.05), Color(0.2, 0.17, 0.25))
+	p.z_index = 6
+	world.add_child(p)
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+static func displace(pos: Vector2, follow: Node2D) -> void:
+	var burst := CPUParticles2D.new()
+	burst.position = pos + Vector2(0, -6)
+	burst.amount = 40
+	burst.one_shot = true
+	burst.explosiveness = 0.9
+	burst.lifetime = 0.8
+	burst.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	burst.emission_sphere_radius = 5.0
+	burst.direction = Vector2(0, -1)
+	burst.spread = 75.0
+	burst.initial_velocity_min = 40.0
+	burst.initial_velocity_max = 110.0
+	burst.damping_min = 120.0
+	burst.damping_max = 180.0
+	burst.gravity = Vector2(0, -50)
+	burst.texture = soft()
+	burst.scale_amount_min = 0.4
+	burst.scale_amount_max = 0.9
+	burst.color_ramp = _smoke_ramp(Color(0.02, 0.01, 0.04), Color(0.3, 0.27, 0.35))
+	burst.z_index = 6
+	world.add_child(burst)
+	burst.emitting = true
+	burst.finished.connect(burst.queue_free)
+	var trail := CPUParticles2D.new()
+	trail.local_coords = false
+	trail.amount = 50
+	trail.lifetime = 1.1
+	trail.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	trail.emission_sphere_radius = 6.0
+	trail.direction = Vector2(0, 1)
+	trail.spread = 180.0
+	trail.initial_velocity_min = 4.0
+	trail.initial_velocity_max = 18.0
+	trail.gravity = Vector2(0, 6)
+	trail.texture = soft()
+	trail.scale_amount_min = 0.35
+	trail.scale_amount_max = 0.75
+	trail.color_ramp = _smoke_ramp(Color(0.05, 0.04, 0.07), Color(0.4, 0.38, 0.45))
+	trail.z_index = -1
+	follow.add_child(trail)
+	trail.position = Vector2(0, -2)
+	trail.emitting = true
+	var t := trail.create_tween()
+	t.tween_interval(0.7)
+	t.tween_callback(func(): trail.emitting = false)
+	t.tween_interval(1.3)
+	t.tween_callback(trail.queue_free)
+
+
+static func ground_smoke(follow: Node2D, radius: float) -> CPUParticles2D:
+	var p := CPUParticles2D.new()
+	p.amount = 90
+	p.lifetime = 1.3
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = radius
+	p.scale = Vector2(1.0, Witch.ELLIPSE)
+	p.direction = Vector2(0, -1)
+	p.spread = 25.0
+	p.initial_velocity_min = 8.0
+	p.initial_velocity_max = 20.0
+	p.damping_min = 6.0
+	p.damping_max = 10.0
+	p.gravity = Vector2.ZERO
+	p.texture = soft()
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 0.85
+	var g := Gradient.new()
+	g.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
+	g.add_point(0.2, Color(0.02, 0.02, 0.03, 0.75))
+	g.add_point(0.65, Color(0.55, 0.53, 0.58, 0.4))
+	g.set_color(g.get_point_count() - 1, Color(0.95, 0.95, 0.97, 0.0))
+	p.color_ramp = g
+	p.z_index = -1
+	follow.add_child(p)
+	p.emitting = true
+	return p

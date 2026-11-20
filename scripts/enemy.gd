@@ -49,8 +49,8 @@ const KINDS := {
 const SHOTS := {
 	"goblin": {"shot": "bomb", "anim": ["attack3", 12, 14.0], "fire_frame": 8, "range": 230.0, "keep": 165.0, "cd": 3.0},
 	"skeleton": {"shot": "sword", "anim": ["attack3", 6, 10.0], "fire_frame": 4, "range": 220.0, "keep": 160.0, "cd": 2.8},
-	"mushroom": {"shot": "spore", "anim": ["attack3", 11, 14.0], "fire_frame": 7, "range": 200.0, "keep": 165.0, "cd": 2.6},
-	"flying_eye": {"shot": "bolt", "anim": ["attack3", 6, 12.0], "fire_frame": 4, "range": 220.0, "keep": 170.0, "cd": 2.2},
+	"mushroom": {"shot": "spore", "anim": ["attack3", 11, 14.0], "fire_frame": 7, "range": 200.0, "keep": 165.0, "cd": 3.4},
+	"flying_eye": {"shot": "bolt", "anim": ["attack3", 6, 12.0], "fire_frame": 4, "range": 220.0, "keep": 170.0, "cd": 3.2},
 }
 const SCALE := {"rat": 0.62, "slime": 0.8, "bat": 0.8, "mimic": 0.85, "goblin": 0.82, "skeleton": 0.82, "mushroom": 0.82, "flying_eye": 0.82}
 const STRUGGLE := {"rat": 2, "slime": 4, "bat": 1, "mimic": 2, "goblin": 1, "skeleton": 1, "mushroom": 1, "flying_eye": 1}
@@ -83,6 +83,9 @@ var _waking := false
 var _slam := false
 var _fly_z := 0.0
 var boss := false
+var level := 10
+var grabbed := false
+var _holder: Witch
 var pinned := false
 var rending := false
 var vis_scale := 1.0
@@ -108,6 +111,7 @@ func _ready() -> void:
 	hp = max_hp
 	weight = cfg.weight
 	boss = cfg.get("boss", false)
+	level = cfg.get("level", 10)
 	vis_scale = SCALE.get(kind, 1.0)
 	hit_radius = cfg.radius * vis_scale
 	body_height = cfg.height * vis_scale
@@ -117,7 +121,7 @@ func _ready() -> void:
 	_fly_z = cfg.get("fly", 0.0)
 	z = _fly_z
 	collision_layer = 2
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 8
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	var col := CollisionShape2D.new()
 	var c := CircleShape2D.new()
@@ -182,13 +186,16 @@ func _physics_process(delta: float) -> void:
 	if rending:
 		velocity = Vector2.ZERO
 		return
+	if grabbed:
+		_held_update(delta)
+		return
 	_cd -= dt
 	_hurt_t -= dt
 	_knock_t -= dt
 	_stun_t -= dt
 	var resists := boss and not sing
 	var zone := 3
-	if alive_w:
+	if alive_w and w.field_active:
 		zone = 0 if dist < w.r_inner() else (1 if dist < w.r_mid() else (2 if dist < w.r_outer() else 3))
 	var speed_mult := 1.0
 	var target_z := 0.0
@@ -485,6 +492,48 @@ func rend(lift_time: float, dmg: float) -> void:
 	else:
 		vz = -200.0
 		hit(dmg, Vector2.ZERO)
+
+
+func grab(w: Witch) -> void:
+	grabbed = true
+	_holder = w
+	pinned = false
+	_attack_t = -1.0
+	_shooting = false
+	_knock_t = 0.0
+	play("hurt", true)
+	sprite.pause()
+	Fx.anim("lift_frame", global_position, 0.55, Color(0.8, 0.7, 1.0), body_height * 0.5)
+
+
+func _held_update(delta: float) -> void:
+	if not is_instance_valid(_holder) or _holder.dead:
+		drop()
+		return
+	var target := _holder.hold_point()
+	velocity = (target - global_position) * 14.0
+	move_and_slide()
+	z = move_toward(z, 18.0 + sin(Time.get_ticks_msec() / 160.0) * 1.5, 120.0 * delta)
+	vz = 0.0
+	visual.rotation = sin(Time.get_ticks_msec() / 90.0) * 0.08
+
+
+func release(dir: Vector2, force: float, dmg: float) -> void:
+	grabbed = false
+	_holder = null
+	visual.rotation = 0.0
+	velocity = dir * force
+	_knock_t = 0.45
+	vz = 60.0
+	if dmg > 0.0:
+		hit(dmg, Vector2.ZERO)
+
+
+func drop() -> void:
+	grabbed = false
+	_holder = null
+	visual.rotation = 0.0
+	vz = -40.0
 
 
 func slam() -> void:

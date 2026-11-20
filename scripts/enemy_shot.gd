@@ -5,7 +5,7 @@ const DIR := "res://assets/monsters/%s"
 const KINDS := {
 	"bomb": {"sheet": "goblin/bomb.png", "fw": 100, "fh": 100, "fly": [0, 9], "burst": [9, 10], "magic": false, "arc": 34.0, "speed": 120.0, "dmg": 14.0, "splash": 22.0},
 	"sword": {"sheet": "skeleton/sword.png", "fw": 92, "fh": 102, "fly": [0, 3], "burst": [3, 5], "magic": false, "arc": 0.0, "speed": 175.0, "dmg": 12.0, "splash": 0.0},
-	"spore": {"sheet": "mushroom/spore.png", "fw": 50, "fh": 50, "fly": [0, 4], "burst": [4, 4], "magic": true, "arc": 0.0, "speed": 95.0, "dmg": 10.0, "splash": 0.0, "home": 1.4},
+	"spore": {"sheet": "mushroom/spore.png", "fw": 50, "fh": 50, "fly": [0, 4], "burst": [4, 4], "magic": true, "arc": 0.0, "speed": 80.0, "dmg": 10.0, "splash": 0.0, "home": 0.8},
 	"bolt": {"sheet": "flying_eye/bolt.png", "fw": 48, "fh": 48, "fly": [0, 3], "burst": [3, 5], "magic": true, "arc": 0.0, "speed": 145.0, "dmg": 9.0, "splash": 0.0, "home": 0.6},
 }
 

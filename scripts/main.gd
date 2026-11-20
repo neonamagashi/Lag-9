@@ -9,6 +9,11 @@ const LEVEL := "res://assets/maps/limbo_ruins.json"
 const START := Vector2(13.5, 9.5)
 const MIMIC_AT := Vector2(4.5, 3.5)
 const WHISKY_AT := Vector2(17.5, 7.5)
+const LIMBO_WAVES := [
+	["rat", "rat", "rat", "goblin", "bat"],
+	["goblin", "goblin", "slime", "flying_eye", "rat", "rat", "bat"],
+	["skeleton", "skeleton", "slime", "flying_eye", "goblin", "mushroom", "bat", "rat", "rat"],
+]
 const WAVES := [
 	["rat", "rat", "rat", "goblin"],
 	["rat", "rat", "goblin", "slime", "bat", "flying_eye"],
@@ -28,6 +33,9 @@ var _braziers: Array[PointLight2D] = []
 var _reticle: Node2D
 var level: TiledLevel
 var _open: Array[Vector2] = []
+var limbo: Limbo
+var waves: Array = WAVES
+var menu: Menu
 
 
 func _ready() -> void:
@@ -43,7 +51,17 @@ func _ready() -> void:
 	var start := Vector2(W * T / 2.0, H * T - 60)
 	var mimic_at := Vector2(W * T - 70, 74)
 	var whisky_at := Vector2(52, H * T - 52)
-	if LEVEL != "":
+	var is_limbo: bool = Game.level_choice == "limbo"
+	Fx.dark_world = is_limbo
+	Game.set_reverb(is_limbo)
+	RenderingServer.set_default_clear_color(Color(0.06, 0.05, 0.08))
+	if is_limbo:
+		cm.color = Color.WHITE
+		bounds = Limbo.BOUNDS
+		start = Vector2.ZERO
+		waves = LIMBO_WAVES
+		cleared = true
+	elif LEVEL != "":
 		cm.color = Color(0.78, 0.74, 0.86)
 		level = TiledLevel.new()
 		var below := Node2D.new()
@@ -72,22 +90,31 @@ func _ready() -> void:
 	witch.add_child(camera)
 	camera.position = Vector2(0, -16)
 	Fx.camera = camera
-	var mimic := Enemy.new().setup("mimic")
-	mimic.position = mimic_at
-	mimic.facing = -1
-	world.add_child(mimic)
-	_spawn_pickup("whisky", whisky_at)
+	if not is_limbo:
+		var mimic := Enemy.new().setup("mimic")
+		mimic.position = mimic_at
+		mimic.facing = -1
+		world.add_child(mimic)
+		_spawn_pickup("whisky", whisky_at)
 	_reticle = Node2D.new()
 	_reticle.z_index = 40
 	_reticle.draw.connect(func():
-		_reticle.draw_arc(Vector2.ZERO, 4.0, 0, TAU, 12, Color(0.6, 1.0, 0.95, 0.9), 1.0)
-		_reticle.draw_rect(Rect2(-0.5, -0.5, 1, 1), Color(0.6, 1.0, 0.95)))
+		var rc := Color(0.35, 0.22, 0.6, 0.9) if Fx.dark_world else Color(0.6, 1.0, 0.95, 0.9)
+		_reticle.draw_arc(Vector2.ZERO, 4.0, 0, TAU, 12, rc, 1.0)
+		_reticle.draw_rect(Rect2(-0.5, -0.5, 1, 1), rc))
 	add_child(_reticle)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	hud = Hud.new()
 	hud.witch = witch
 	hud.main = self
+	hud.show_abilities = not is_limbo
 	add_child(hud)
+	menu = Menu.new()
+	add_child(menu)
+	if is_limbo:
+		limbo = Limbo.new()
+		limbo.setup(self, witch)
+		add_child(limbo)
 
 
 func _process(delta: float) -> void:
@@ -103,9 +130,9 @@ func _process(delta: float) -> void:
 	if wave_alive <= 0:
 		_next_wave_t -= delta
 		if _next_wave_t <= 0.0:
-			if wave + 1 >= WAVES.size():
+			if wave + 1 >= waves.size():
 				cleared = true
-				hud.banner("Room cleared", "F5 to play again")
+				hud.banner("Trial complete" if limbo else "Room cleared", "F5 to play again")
 				Sfx.play("singularity", 0.0, -8.0)
 			else:
 				_start_wave(wave + 1)
@@ -120,10 +147,18 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_wave(i: int) -> void:
 	wave = i
 	hud.banner("Wave %d" % (i + 1), "")
-	var kinds: Array = WAVES[i]
+	var kinds: Array = waves[i]
 	wave_alive = kinds.size()
 	var center := Vector2(W * T / 2.0, H * T / 2.0 - 10)
+	if limbo:
+		center = witch.global_position
 	var spots: Array[Vector2] = []
+	if limbo:
+		for k in 24:
+			var a := k / 24.0 * TAU
+			var p := witch.global_position + Vector2(cos(a), sin(a) * 0.75) * randf_range(190, 250)
+			if Limbo.BOUNDS.grow(-30).has_point(p) and p.distance_to(Limbo.WARDEN_AT) > 60.0:
+				spots.append(p)
 	for p in _open:
 		var dd := p.distance_to(witch.global_position)
 		if dd > 170.0 and dd < 300.0:
@@ -145,6 +180,13 @@ func _spawn(kind: String, p: Vector2) -> void:
 	e.position = p
 	e.set_meta("wave", true)
 	world.add_child(e)
+
+
+func start_battle() -> void:
+	cleared = false
+	wave = -1
+	wave_alive = 0
+	_next_wave_t = 0.6
 
 
 func on_enemy_died(e: Enemy) -> void:

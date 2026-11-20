@@ -2,25 +2,34 @@
 
 A 2.5D (three-quarter top-down) pixel-art roguelite in Godot 4.7: a gravity witch descending the nine circles of hell to rescue her cat, Whisky. Open this folder in Godot and press F5.
 
-The current playable slice is Limbo: the Ancient Ruins sample map, four waves of monsters, and a mimic hiding as a chest.
+Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four waves plus a mimic). Switch in Settings (Esc).
 
 ## Controls
 | Key | Action |
 |---|---|
-| WASD | Move |
-| Mouse | Aim |
-| LMB (hold) | Pierce: comet bolts |
-| RMB (hold, release) | Send: charged cone blast; enemies hitting walls, ledges or each other take impact damage |
-| E | Draw: yank enemies toward you (into the crushing rings) |
-| R | Rend: lift the 3 nearest enemies and tear them apart (instant kill on light and medium mobs; heavy ones and bosses take big damage) |
-| Space | Snap: teleport (movement direction, or toward the cursor when standing still); stops short of walls and water |
+| WASD | Move (she floats; Shift jumps) |
+| Mouse | Aim (a small rune circles her inner ring showing the direction) |
+| LMB (hold) | Pierce: a beam from her wand toward the cursor, hitting everything along it |
+| RMB | Grab: seize the enemy you're aiming at (any mob; bosses only if her level is at or above theirs) and hold it in front of you. RMB again (label switches to Release): hold to charge, release to fling it where you aim |
+| F (hold, release) | Send: a runic smoke shockwave that pushes every enemy around her outward; impacts with walls or other enemies hurt |
+| T (hold, release) | Draw: the same wave pulled inward, dragging enemies into the crushing rings |
+| R | Rend: lift the 3 nearest enemies and tear them apart |
+| Space | Snap: teleport; the air rushes in behind her and her arrival billows smoke like dry ice |
+| Shift / Mouse 5 (hold, release) | Jump: charge for height; clears ledges and objects, lands on the nearest open ground |
 | Q | Flip the field between Crush and Lift |
-| G | Singularity (60 mana): the field grows 2.4x, everything inside slows, crush doubles, bosses lose their resistance |
+| G | Singularity (60 mana): field grows 2.4x, black and white smoke billows beneath her |
 | 1 | Drink whisky (heal) |
+| E | Interact |
+| Esc | Settings (switch between Limbo and the Ancient Ruins test arena) |
 | F1 / F5 | Help / restart |
 
+## Limbo (Circle 1)
+The game starts here. Black, then a blinding flash: she arrives in a pure white void with only her shadow and a few gravity twinkles. Walking north she meets the souls of Limbo, wandering and mumbling, then a towering shadow-cloaked figure. Press E at its feet to Begin: the souls drift away, her field and abilities awaken, and three waves attack. The whole level has reverb.
+
+Placeholder dialogue lives in `assets/dialogue/limbo.json` (edit the lines freely). Voices are babble sounds while text types out.
+
 ## The gravity field
-Three rings, sized from her height (37 px): inner = 1x her height wide, middle = 3x, outer = 8x. Gravity works through walls and obstacles.
+Three rings, sized from her height (40 px): inner = 1x her height wide, middle = 3x, outer = 8x. Gravity works through walls and obstacles.
 
 | Zone | Crush mode | Lift mode |
 |---|---|---|
@@ -40,13 +49,15 @@ Maps are built in [Tiled](https://www.mapeditor.org/) and converted with
 The converter repacks animated tiles and marks walls and water solid (platform tops and stairs stay walkable). `scripts/tiled_level.gd` builds the tile layers, collision and enemy pathfinding at runtime. The level is chosen by `LEVEL` at the top of `scripts/main.gd`; set it to `""` for the original placeholder dungeon room.
 
 ## Tools (Python, in `tools/`)
-- `gen_back_view.py`: back-facing witch frames from the front sheets.
-- `gen_cast_clean.py`: cast frames without the baked-in ground orbs, so effects follow your aim.
+- `gen_white_witch.py`: the White Witch's glowing purple eyes, back views, aim-able cast and separate beam, and the jump pose.
+- `gen_limbo.py`: the souls of Limbo (skin tones, loincloths, tunics) and the cloaked figure.
+- `synth_sfx.py`: snap, babble, mumble, arrival flash, push/pull waves, grab, beam, jump and land sounds.
 - `gen_sigils.py`: the field's rune ring and seven-point star.
 - `gen_env.py`: placeholder dungeon pixel art.
 
 ## Tests
-- `tests/play_test.tscn` (headless): checks every field rule, Rend, teleport, bosses and projectiles, then a bot plays all four waves.
+- `tests/play_test.tscn` (headless, ruins): every field rule, Rend, teleport, grab and throw, push, pull, jump, bosses and projectiles, then a bot plays all four waves.
+- `tests/limbo_test.tscn` (headless): arrival, the walk north, Begin, and the trial battle.
 - `tests/shots_vfx.tscn`: renders screenshots of each effect.
 
 See `CREDITS.md`.

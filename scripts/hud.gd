@@ -1,14 +1,15 @@
 class_name Hud
 extends CanvasLayer
 
-const SLOTS := [["pierce", "LMB", "Pierce"], ["send", "RMB", "Send"], ["draw", "E", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["singularity", "G", "Sing."]]
-const MAX_CD := {"pierce": Witch.PIERCE_CD, "send": Witch.SEND_CD, "draw": Witch.DRAW_CD, "rend": Witch.REND_CD, "snap": Witch.SNAP_CD, "singularity": Witch.SING_CD}
+const SLOTS := [["pierce", "LMB", "Pierce"], ["grab", "RMB", "Grab"], ["send", "F", "Send"], ["draw", "T", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["jump", "Shft", "Jump"], ["singularity", "G", "Sing."]]
+const MAX_CD := {"pierce": Witch.PIERCE_CD, "grab": 0.4, "send": Witch.SEND_CD, "draw": Witch.DRAW_CD, "rend": Witch.REND_CD, "snap": Witch.SNAP_CD, "jump": 0.2, "singularity": Witch.SING_CD}
 const INK := Color(0.07, 0.05, 0.09)
-const HELP := "WASD move    LMB Pierce    RMB hold Send    E Draw    R Rend\nSpace Snap (teleport)    Q flip Crush/Lift    G Singularity    1 Whisky    F1 help    F5 restart"
+const HELP := "WASD move   LMB Pierce   RMB Grab, RMB again (hold) Release   F Send   T Draw   R Rend\nSpace Snap   Shift Jump (hold to charge)   Q Crush/Lift   G Singularity   1 Whisky   E Interact   Esc Settings"
 
 var witch: Witch
 var main: Node
 var help := true
+var show_abilities := true
 var _canvas: Control
 var _banner_t := 0.0
 var _banner := ["", ""]
@@ -60,6 +61,9 @@ func _draw_hud() -> void:
 	if not witch:
 		return
 	var vs := _canvas.size
+	if not show_abilities:
+		_draw_common(vs)
+		return
 	_bar(Vector2(8, 8), Vector2(84, 6), witch.hp / witch.max_hp, Color(0.85, 0.3, 0.38))
 	_bar(Vector2(8, 18), Vector2(84, 4), witch.mana / 100.0, Color(0.36, 0.8, 0.78))
 	_text(Vector2(96, 15), "%d" % ceil(witch.hp), 8, Color(1, 0.9, 0.9))
@@ -73,7 +77,7 @@ func _draw_hud() -> void:
 	var mc := Witch.CRUSH_COLOR if witch.mode == Witch.Mode.CRUSH else Witch.LIFT_COLOR
 	_text(Vector2(vs.x - 8, 15), "Field: %s  [Q]" % mode, 8, mc, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	if main.wave >= 0:
-		_text(Vector2(vs.x - 8, 26), "Wave %d/%d" % [main.wave + 1, main.WAVES.size()], 8, Color(0.9, 0.85, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+		_text(Vector2(vs.x - 8, 26), "Wave %d/%d" % [main.wave + 1, main.waves.size()], 8, Color(0.9, 0.85, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	var sw := 30.0
 	var x0 := vs.x / 2.0 - SLOTS.size() * (sw + 3) / 2.0
 	for i in SLOTS.size():
@@ -86,13 +90,24 @@ func _draw_hud() -> void:
 		if cd > 0.0:
 			var k: float = cd / MAX_CD[s[0]]
 			_canvas.draw_rect(Rect2(r.position + Vector2(0, r.size.y * (1.0 - k)), Vector2(r.size.x, r.size.y * k)), Color(0.05, 0.04, 0.07, 0.75))
-		if s[0] == "send" and witch.send_charge >= 0.0:
-			_canvas.draw_rect(Rect2(r.position, Vector2(r.size.x * witch.send_charge / Witch.SEND_MAX_CHARGE, 2)), Color(0.75, 0.65, 1.0))
+		var charge := {"send": [witch.send_charge, Witch.SEND_MAX_CHARGE], "draw": [witch.draw_charge, Witch.DRAW_MAX_CHARGE],
+			"grab": [witch.throw_charge, Witch.THROW_MAX_CHARGE], "jump": [witch.jump_charge, Witch.JUMP_MAX_CHARGE]}
+		if charge.has(s[0]) and charge[s[0]][0] >= 0.0:
+			_canvas.draw_rect(Rect2(r.position, Vector2(r.size.x * charge[s[0]][0] / charge[s[0]][1], 2)), Color(0.75, 0.65, 1.0))
 		var tc := Color(0.75, 1.0, 0.95) if ready else Color(0.5, 0.48, 0.55)
-		_text(r.position + Vector2(0, 9), s[2], 7, tc, HORIZONTAL_ALIGNMENT_CENTER, sw)
+		var label: String = s[2]
+		if s[0] == "grab" and witch.held:
+			label = "Release"
+			tc = Color(1.0, 0.85, 0.6)
+		_text(r.position + Vector2(0, 9), label, 7 if label.length() < 7 else 6, tc, HORIZONTAL_ALIGNMENT_CENTER, sw)
 		_text(r.position + Vector2(0, 18), s[1], 6, Color(0.7, 0.65, 0.75), HORIZONTAL_ALIGNMENT_CENTER, sw)
+	_draw_common(vs)
 	if witch.singularity_t > 0.0:
 		_bar(Vector2(vs.x / 2.0 - 40, vs.y - 32), Vector2(80, 2), witch.singularity_t / Witch.SING_TIME, Witch.CRUSH_COLOR)
+
+
+
+func _draw_common(vs: Vector2) -> void:
 	if _banner_t > 0.0:
 		var a := clampf(_banner_t, 0.0, 1.0)
 		_text(Vector2(0, vs.y * 0.36), _banner[0], 16, Color(0.9, 0.85, 1.0, a), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
@@ -101,7 +116,7 @@ func _draw_hud() -> void:
 	if witch.dead:
 		_text(Vector2(0, vs.y * 0.4), "Whisky waits", 16, Color(1.0, 0.6, 0.6), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.4 + 14), "F5 to try again", 8, Color(0.85, 0.8, 0.85), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	if help:
+	if help and show_abilities:
 		var lines := HELP.split("\n")
 		_canvas.draw_rect(Rect2(0, vs.y - 58, vs.x, 26), Color(0.05, 0.04, 0.07, 0.6))
 		for i in lines.size():

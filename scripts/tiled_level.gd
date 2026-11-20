@@ -92,13 +92,16 @@ func _collision(parent: Node2D) -> void:
 			col.shape = r
 			col.position = Vector2((x0 + x) * tile / 2.0, y * tile + tile / 2.0)
 			body.add_child(col)
+	var bounds := StaticBody2D.new()
+	bounds.collision_layer = 8
+	parent.add_child(bounds)
 	for r in [Rect2(-40, -40, size.x + 80, 40), Rect2(-40, size.y, size.x + 80, 40), Rect2(-40, 0, 40, size.y), Rect2(size.x, 0, 40, size.y)]:
 		var col := CollisionShape2D.new()
 		var shape := RectangleShape2D.new()
 		shape.size = r.size
 		col.shape = shape
 		col.position = r.get_center()
-		body.add_child(col)
+		bounds.add_child(col)
 
 
 func is_solid(x: int, y: int) -> bool:
@@ -131,3 +134,18 @@ func path(from: Vector2, to: Vector2) -> PackedVector2Array:
 	if astar.is_point_solid(a) or astar.is_point_solid(b):
 		return PackedVector2Array()
 	return astar.get_point_path(a, b)
+
+
+func nearest_open(p: Vector2) -> Vector2:
+	var best := p
+	var best_d := INF
+	var c := Vector2i(int(p.x / tile), int(p.y / tile))
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var n := c + Vector2i(dx, dy)
+			if not is_solid(n.x, n.y):
+				var q := Vector2(n) * tile + Vector2(tile, tile) * 0.5
+				if q.distance_to(p) < best_d:
+					best_d = q.distance_to(p)
+					best = q
+	return best
