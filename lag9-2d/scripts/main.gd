@@ -108,8 +108,7 @@ func _start_wave(i: int) -> void:
 
 
 func _spawn(kind: String, p: Vector2) -> void:
-	Fx.ring(p, Color(0.45, 0.9, 0.85), 18.0, 0.4)
-	Fx.burst(p, Color(0.45, 0.9, 0.85), 10, 50.0, 10.0)
+	Fx.anim("summon", p, 0.8, Color.WHITE, 12.0)
 	Sfx.play("ui_click", 0.1, -8.0)
 	var e := Enemy.new().setup(kind)
 	e.position = p

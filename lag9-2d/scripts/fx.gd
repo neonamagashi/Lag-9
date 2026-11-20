@@ -4,7 +4,24 @@ extends RefCounted
 const TEAL := Color(0.46, 0.86, 0.82)
 const LIGHT_TEX := preload("res://assets/env/light.png")
 
+const VFX := "res://assets/vfx/"
+const ANIMS := {
+	"cross": ["spell_pack3_a.png", 64, 2, 0, 18, 40.0],
+	"summon": ["spell_pack3_a.png", 64, 0, 0, 17, 30.0],
+	"vortex": ["spell_pack3_b.png", 64, 6, 0, 9, 12.0],
+	"blades_in": ["spell_pack3_b.png", 64, 4, 0, 9, 22.0],
+	"crush_ring": ["spell_pack3_b.png", 64, 5, 0, 9, 18.0],
+	"lift_frame": ["spell_pack3_b.png", 64, 2, 0, 8, 18.0],
+	"nova": ["holy/holy_nova.png", 64, 0, 0, 20, 34.0],
+	"heal": ["holy/heal.png", 64, 0, 0, 12, 14.0],
+	"comet": ["bullets/water.png", 16, 0, 24, 5, 14.0],
+	"spark": ["bullets/water.png", 16, 5, 24, 5, 18.0],
+	"slam_ring": ["bullets/purple.png", 16, 5, 14, 4, 14.0],
+	"mana_orb": ["bullets/water.png", 16, 7, 14, 4, 6.0],
+}
+
 static var world: Node2D
+static var _anim_frames := {}
 static var camera: Camera2D
 static var _shake := 0.0
 static var _spikes: SpriteFrames
@@ -101,6 +118,31 @@ static func spikes(pos: Vector2) -> void:
 		var t := s.create_tween()
 		t.tween_property(s, "modulate:a", 0.0, 0.25)
 		t.tween_callback(s.queue_free))
+
+
+static func frames(key: String) -> SpriteFrames:
+	if _anim_frames.has(key):
+		return _anim_frames[key]
+	var d: Array = ANIMS[key]
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	var size: int = d[1]
+	Sheets.add(sf, "play", VFX + d[0], size, size, d[4], d[5], false, false, Rect2i(d[3] * size, d[2] * size, size, size))
+	_anim_frames[key] = sf
+	return sf
+
+
+static func anim(key: String, pos: Vector2, scale := 1.0, tint := Color.WHITE, height := 0.0, flatten := 1.0, z := 5) -> AnimatedSprite2D:
+	var s := AnimatedSprite2D.new()
+	s.sprite_frames = frames(key)
+	s.position = pos + Vector2(0, -height)
+	s.scale = Vector2(scale, scale * flatten)
+	s.modulate = tint
+	s.z_index = z
+	world.add_child(s)
+	s.play("play")
+	s.animation_finished.connect(s.queue_free)
+	return s
 
 
 static func ghost(actor: Actor) -> void:

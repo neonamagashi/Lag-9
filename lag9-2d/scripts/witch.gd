@@ -100,7 +100,10 @@ func _physics_process(delta: float) -> void:
 	_hurt_t -= delta
 	_iframes -= delta
 	if singularity_t > 0.0:
+		var before := singularity_t
 		singularity_t -= delta
+		if fmod(before, 1.5) < fmod(singularity_t, 1.5) and singularity_t > 0.5:
+			Fx.anim("vortex", global_position, 2.2, Color(0.85, 0.8, 1.0, 0.3), 0.0, 0.6, -1)
 		if singularity_t <= 0.0:
 			Sfx.play("flip_crush", 0.0, -6.0)
 	var target_r := FIELD_RADIUS * (SING_RADIUS if singularity_t > 0.0 else 1.0)
@@ -167,11 +170,12 @@ func _abilities(delta: float, dir: Vector2) -> void:
 		_cast_t = 0.5
 		Sfx.play("singularity", 0.0, 0.0)
 		Fx.shake(4.0)
-		Fx.ring(global_position, _mode_color(), FIELD_RADIUS * SING_RADIUS, 0.5)
+		Fx.anim("vortex", global_position, 3.2, Color(0.85, 0.8, 1.0, 0.45), 0.0, 0.6, -1)
 	if Input.is_action_just_pressed("whisky") and whisky > 0 and hp < max_hp:
 		whisky -= 1
 		hp = minf(max_hp, hp + WHISKY_HEAL)
 		Sfx.play("whisky", 0.0, -2.0)
+		Fx.anim("heal", global_position, 1.0, Color.WHITE, 18.0)
 		Fx.text(global_position, "+%d" % WHISKY_HEAL, Color(0.6, 1.0, 0.6))
 
 
@@ -231,6 +235,7 @@ func _send(k: float) -> void:
 		var to: Vector2 = e.global_position - global_position
 		e.knock(to.normalized() if to.length() > 1.0 else aim, lerpf(170.0, 400.0, k), lerpf(6.0, 20.0, k))
 	_cone_fx(rng, SEND_CONE, Color(0.7, 0.6, 1.0))
+	Fx.anim("nova", global_position + aim * 18.0, 1.3 + 0.8 * k, Color(0.8, 0.72, 1.0), 0.0, 0.8, -1)
 	Sfx.play("send", 0.05, -4.0 + 4.0 * k)
 	Fx.shake(1.5 + 2.5 * k)
 
@@ -244,6 +249,7 @@ func _draw_in() -> void:
 		var pull := clampf(to.length() * 2.6, 120.0, 360.0)
 		e.knock(to.normalized(), pull, 3.0, true)
 	_cone_fx(DRAW_RANGE, DRAW_CONE, Color(0.5, 0.95, 0.9))
+	Fx.anim("blades_in", global_position, 1.6, Color(0.75, 1.0, 1.0), 14.0)
 	Sfx.play("draw", 0.05, -4.0)
 
 

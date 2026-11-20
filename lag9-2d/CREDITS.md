@@ -8,6 +8,13 @@
   credit appreciated: https://luizmelo.itch.io/monsters-creatures-fantasy
 - **Monsters (rat, slime, bat, mimic):** "Monsters Creatures Fantasy 2", by the same artist.
   TODO: confirm the exact page and licence for pack 2.
+- **Spell effects (Send shockwave, whisky heal):** Pixel Holy Effects Pack 01 by Sentient Dream Studio,
+  https://sentient-dream-studio.itch.io/ ("Pixel art effects by Sentient Dream Studio"). Commercial use OK;
+  no resale or redistribution of the files, even modified.
+- **Spell effects (Pierce hits, Draw, Singularity, Lift, crush kills, summons):** "Pixel Holy Spell Effect 32x32 Pack 3".
+  TODO: confirm author, page and licence.
+- **Bolts, sparks, orbs, slam rings:** "Effect and Bullet 16x16" (water/purple/green/fire).
+  TODO: confirm author, page and licence.
 - **Dungeon tiles, props and effects:** placeholder pixel art made for this project (`tools/gen_env.py`).
 
 ## Sound

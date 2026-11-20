@@ -157,6 +157,8 @@ func _physics_process(delta: float) -> void:
 		target_z = LIFT_Z[weight] * (1.6 if w.singularity_t > 0.0 else 1.0) + sin(Time.get_ticks_msec() / 300.0 + get_instance_id()) * 2.0
 	var was_lifted := lifted
 	lifted = in_field and w.mode == Witch.Mode.LIFT and weight < 3
+	if lifted and not was_lifted:
+		Fx.anim("lift_frame", global_position, 0.55, Color.WHITE, body_height * 0.5)
 	if was_lifted and not lifted and z > 4.0:
 		_slam = true
 	if lifted:
@@ -254,7 +256,7 @@ func _land(impact: float) -> void:
 	var dmg := max_hp * clampf(impact / 1000.0, 0.08, 0.3) * (1.5 if _slam else 1.0)
 	_slam = false
 	Fx.burst(global_position, Color(0.75, 0.7, 0.85), 10, 70.0, 2.0)
-	Fx.ring(global_position, Witch.CRUSH_COLOR, 22.0, 0.25)
+	Fx.anim("slam_ring", global_position, 2.4, Color.WHITE, 0.0, 0.6, -1)
 	Sfx.play("impact", 0.1, -2.0)
 	Fx.shake(2.0)
 	hit(dmg, Vector2.ZERO)
@@ -339,7 +341,10 @@ func _die(crushed: bool) -> void:
 		vz = 0.0
 	play("death", true)
 	Sfx.play("crush_kill" if crushed else "enemy_hit", 0.1, -4.0)
-	Fx.burst(global_position + Vector2(0, -z), Color(0.85, 0.8, 0.95), 12, 70.0, body_height * 0.5)
+	if crushed:
+		Fx.anim("crush_ring", global_position, 0.8, Color.WHITE, z + body_height * 0.5)
+	else:
+		Fx.burst(global_position + Vector2(0, -z), Color(0.85, 0.8, 0.95), 12, 70.0, body_height * 0.5)
 	var w: Witch = Fx.world.get_meta("witch")
 	if w:
 		w.gain_mana(4.0)
