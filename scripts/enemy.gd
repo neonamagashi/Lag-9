@@ -275,6 +275,8 @@ func _steer(goal: Vector2, dt: float) -> Vector2:
 	if _path_t <= 0.0 or _path.is_empty():
 		_path_t = 0.5
 		_path = level.path(global_position, goal)
+		if _path.size() > 1:
+			_path.remove_at(0)
 	while _path.size() > 1 and global_position.distance_to(_path[0]) < 10.0:
 		_path.remove_at(0)
 	if _path.is_empty():

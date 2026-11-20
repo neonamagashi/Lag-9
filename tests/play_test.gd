@@ -158,4 +158,8 @@ func _autoplay() -> void:
 		await get_tree().physics_frame
 	for a in ["pierce", "rend", "draw", "whisky", "singularity"]:
 		Input.action_release(a)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not e.dead and not e.dormant:
+			var q := PhysicsRayQueryParameters2D.create(w.global_position, e.global_position, 1)
+			print("  left: %s at %s dist %.0f hp %.0f los %s anim %s shooting %s" % [e.kind, e.global_position, e.global_position.distance_to(w.global_position), e.hp, not w.get_world_2d().direct_space_state.intersect_ray(q), e.sprite.animation, e._shooting])
 	print("autoplay: cleared %s after %.1fs, wave %d, witch hp %.0f (low %.0f), dead %s" % [main.cleared, t / 60.0, main.wave + 1, w.hp, min_hp, w.dead])
