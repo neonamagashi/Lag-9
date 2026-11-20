@@ -49,6 +49,7 @@ var _iframes := 0.0
 var _snap_t := 0.0
 var _snap_dir := Vector2.ZERO
 var _field_r := FIELD_RADIUS
+var _back := false
 var field: Node2D
 var glow: PointLight2D
 
@@ -72,7 +73,12 @@ func _ready() -> void:
 	Sheets.add(sf, "charge", SHEET % "charge", 48, 48, 5, 10.0, true, true)
 	Sheets.add(sf, "hurt", SHEET % "take_damage", 32, 48, 3, 12.0, false, true)
 	Sheets.add(sf, "death", SHEET % "death", 32, 48, 10, 10.0, false, true)
+	Sheets.add(sf, "idle_back", SHEET % "idle_back", 32, 48, 6, 8.0, true, true)
+	Sheets.add(sf, "run_back", SHEET % "run_back", 32, 48, 8, 12.0, true, true)
+	Sheets.add(sf, "charge_back", SHEET % "charge_back", 48, 48, 5, 10.0, true, true)
+	Sheets.add(sf, "hurt_back", SHEET % "take_damage_back", 32, 48, 3, 12.0, false, true)
 	anchors = {
+		"idle_back": Vector3(15, 42, 32), "run_back": Vector3(15, 42, 32), "charge_back": Vector3(23, 44, 48), "hurt_back": Vector3(15, 42, 32),
 		"idle": Vector3(15, 42, 32), "run": Vector3(15, 42, 32), "cast": Vector3(18.5, 43, 40),
 		"charge": Vector3(23, 44, 48), "hurt": Vector3(15, 42, 32), "death": Vector3(15, 42, 32),
 	}
@@ -170,20 +176,28 @@ func _abilities(delta: float, dir: Vector2) -> void:
 
 
 func _animate(dir: Vector2) -> void:
-	if absf(aim.x) > 0.2 and (_cast_t > 0.0 or send_charge >= 0.0 or Input.is_action_pressed("pierce")):
-		facing = 1 if aim.x > 0 else -1
-	elif absf(dir.x) > 0.1:
-		facing = 1 if dir.x > 0 else -1
-	if _hurt_t > 0.0:
-		play("hurt")
-	elif send_charge >= 0.0 or (singularity_t > SING_TIME - 0.6):
-		play("charge")
-	elif _cast_t > 0.0:
-		play("cast")
-	elif velocity.length() > 12.0:
-		play("run")
+	var casting := _cast_t > 0.0 or send_charge >= 0.0 or Input.is_action_pressed("pierce")
+	if casting:
+		if absf(aim.x) > 0.2:
+			facing = 1 if aim.x > 0 else -1
+		_back = aim.y < -0.5
 	else:
-		play("idle")
+		if absf(dir.x) > 0.1:
+			facing = 1 if dir.x > 0 else -1
+		if dir.y < -0.35:
+			_back = true
+		elif dir.y > 0.35 or (absf(dir.x) > 0.5 and absf(dir.y) < 0.2):
+			_back = false
+	var anim := "idle"
+	if _hurt_t > 0.0:
+		anim = "hurt"
+	elif send_charge >= 0.0 or (singularity_t > SING_TIME - 0.6):
+		anim = "charge"
+	elif _cast_t > 0.0:
+		anim = "idle" if _back else "cast"
+	elif velocity.length() > 12.0:
+		anim = "run"
+	play(anim + "_back" if _back and sprite.sprite_frames.has_animation(anim + "_back") else anim)
 
 
 # ---------- abilities ----------

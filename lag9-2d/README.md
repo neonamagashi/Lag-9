@@ -1,6 +1,6 @@
 # Lag 9 (2.5D prototype)
 
-A small playable room for the 2.5D roguelite direction: the Blue Witch in a ¾-view dungeon arena with the gravity kit, against three waves of monsters, plus a mimic hiding as a chest.
+A small playable room for the 2.5D roguelite direction: the Blue Witch in a ¾-view dungeon arena with the gravity kit, against four waves of monsters (rat, goblin, slime, bat, mushroom, skeleton, flying eye), plus a mimic hiding as a chest. She turns to face away when you move or aim upward (back-view frames are generated from her front frames by `tools/gen_back_view.py`).
 
 Open this folder (`lag9-2d/`) as its own project in Godot 4.7 and press F5. The 3D project in the repo root ignores this folder.
 

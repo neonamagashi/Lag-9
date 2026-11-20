@@ -6,9 +6,10 @@ const H := 21
 const WALL_H := 40
 const ENV := "res://assets/env/%s.png"
 const WAVES := [
-	["rat", "rat", "rat", "rat"],
-	["rat", "rat", "rat", "slime", "bat", "bat"],
-	["slime", "slime", "bat", "bat", "rat", "rat", "rat", "rat"],
+	["rat", "rat", "rat", "goblin"],
+	["rat", "rat", "goblin", "slime", "bat", "flying_eye"],
+	["mushroom", "mushroom", "skeleton", "goblin", "goblin", "bat", "flying_eye"],
+	["skeleton", "skeleton", "slime", "slime", "flying_eye", "flying_eye", "goblin", "rat", "rat", "rat"],
 ]
 
 var world: Node2D

@@ -24,6 +24,26 @@ const KINDS := {
 		"fw": 146, "fh": 146, "anchor": Vector2(73, 83), "shadow": Vector2(16, 4), "hit_frame": 8,
 		"anims": {"closed": ["idle_closed", 1, 1.0, true], "wake": ["opening", 6, 12.0, false], "transform": ["transform", 7, 12.0, false], "idle": ["idle_transformed", 9, 10.0, true], "move": ["walk", 6, 9.0, true], "attack": ["attack_1", 14, 16.0, false], "hurt": ["hurt", 3, 12.0, false], "death": ["death", 6, 10.0, false]},
 	},
+	"goblin": {
+		"hp": 60.0, "speed": 72.0, "weight": 1, "dmg": 12.0, "range": 24.0, "cd": 1.2, "radius": 7.0, "height": 30.0,
+		"fw": 150, "fh": 150, "anchor": Vector2(75, 101), "shadow": Vector2(10, 3), "hit_frame": 6,
+		"anims": {"idle": ["idle", 4, 8.0, true], "move": ["run", 8, 12.0, true], "attack": ["attack", 8, 14.0, false], "hurt": ["take_hit", 4, 14.0, false], "death": ["death", 4, 8.0, false]},
+	},
+	"skeleton": {
+		"hp": 110.0, "speed": 40.0, "weight": 2, "dmg": 18.0, "range": 30.0, "cd": 1.8, "radius": 9.0, "height": 36.0,
+		"fw": 150, "fh": 150, "anchor": Vector2(80, 101), "shadow": Vector2(12, 3), "hit_frame": 6,
+		"anims": {"idle": ["idle", 4, 8.0, true], "move": ["walk", 4, 8.0, true], "attack": ["attack", 8, 12.0, false], "hurt": ["take_hit", 4, 14.0, false], "death": ["death", 4, 8.0, false]},
+	},
+	"mushroom": {
+		"hp": 80.0, "speed": 46.0, "weight": 2, "dmg": 14.0, "range": 24.0, "cd": 1.5, "radius": 8.0, "height": 28.0,
+		"fw": 150, "fh": 150, "anchor": Vector2(75, 101), "shadow": Vector2(10, 3), "hit_frame": 6,
+		"anims": {"idle": ["idle", 4, 8.0, true], "move": ["run", 8, 12.0, true], "attack": ["attack", 8, 14.0, false], "hurt": ["take_hit", 4, 14.0, false], "death": ["death", 4, 8.0, false]},
+	},
+	"flying_eye": {
+		"hp": 40.0, "speed": 82.0, "weight": 1, "dmg": 9.0, "range": 22.0, "cd": 1.4, "radius": 6.0, "height": 20.0, "fly": 26.0,
+		"fw": 150, "fh": 150, "anchor": Vector2(77, 92), "shadow": Vector2(9, 3), "hit_frame": 6,
+		"anims": {"idle": ["flight", 8, 14.0, true], "move": ["flight", 8, 14.0, true], "attack": ["attack", 8, 16.0, false], "hurt": ["take_hit", 4, 14.0, false], "death": ["death", 4, 8.0, false]},
+	},
 }
 
 # ---------- field tuning by weight ----------
