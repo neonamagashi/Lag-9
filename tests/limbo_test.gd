@@ -22,13 +22,13 @@ func _ready() -> void:
 		var st: String = Limbo.Stage.keys()[main.limbo.stage]
 		if not marks.has(st):
 			marks[st] = snappedf(t / 60.0, 0.1)
-		max_keel = maxf(max_keel, w.keel)
+		max_keel = maxf(max_keel, 1.0 if w.pose == "hunch" else 0.0)
 		if main.limbo.stage == Limbo.Stage.WALK:
 			slow_speed = maxf(slow_speed, w.velocity.length())
 		await get_tree().physics_frame
 	Input.action_release("move_up")
 	await _frames(10)
-	print("scene: stages reached at %s s, ready after %.1fs; walking speed %.0f (normal %d); she keeled over (max %.2f); cats seen %s; prompt visible %s, %.0f px from the warden" % [marks, t / 60.0, slow_speed, Witch.SPEED, max_keel, get_tree().root.find_children("*", "Whiskey", true, false).size(), main.limbo._prompt.visible, w.global_position.distance_to(Limbo.WARDEN_AT)])
+	print("scene: stages reached at %s s, ready after %.1fs; walking speed %.0f (normal %d); she bent over to vomit %s; cats seen %s; prompt visible %s, %.0f px from the warden" % [marks, t / 60.0, slow_speed, Witch.SPEED, max_keel > 0.0, get_tree().root.find_children("*", "Whiskey", true, false).size(), main.limbo._prompt.visible, w.global_position.distance_to(Limbo.WARDEN_AT)])
 	Input.action_press("interact")
 	await _frames(3)
 	Input.action_release("interact")

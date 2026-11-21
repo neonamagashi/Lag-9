@@ -152,6 +152,17 @@ static func frames(key: String) -> SpriteFrames:
 	return sf
 
 
+const VOID_ANIMS := ["cross", "spark", "lift_frame", "crush_ring", "slam_ring", "nova", "vortex", "blades_in", "summon", "comet"]
+static var _void_mat: ShaderMaterial
+
+
+static func _void() -> ShaderMaterial:
+	if not _void_mat:
+		_void_mat = ShaderMaterial.new()
+		_void_mat.shader = load("res://scripts/void.gdshader")
+	return _void_mat
+
+
 static func anim(key: String, pos: Vector2, scale := 1.0, tint := Color.WHITE, height := 0.0, flatten := 1.0, z := 5) -> AnimatedSprite2D:
 	var s := AnimatedSprite2D.new()
 	s.sprite_frames = frames(key)
@@ -159,6 +170,8 @@ static func anim(key: String, pos: Vector2, scale := 1.0, tint := Color.WHITE, h
 	s.scale = Vector2(scale, scale * flatten)
 	s.modulate = tint
 	s.z_index = z
+	if key in VOID_ANIMS:
+		s.material = _void()
 	world.add_child(s)
 	s.play("play")
 	s.animation_finished.connect(s.queue_free)
@@ -172,7 +185,7 @@ static func ghost(actor: Actor) -> void:
 	g.flip_h = actor.sprite.flip_h
 	g.offset = actor.sprite.offset
 	g.position = actor.global_position + Vector2(0, -actor.z)
-	g.modulate = Color(0.5, 1.0, 0.95, 0.55)
+	g.modulate = Color(0.35, 0.2, 0.6, 0.55)
 	g.z_index = -1
 	world.add_child(g)
 	var t := g.create_tween()
@@ -285,7 +298,7 @@ static func black_hole(pos: Vector2, size: float) -> void:
 	smoke(pos, int(10 + 18 * size), size)
 
 
-static func beam(tip: Vector2, dir: Vector2, length: float) -> void:
+static func beam(tip: Vector2, dir: Vector2, length: float, behind := false, band := 20.0) -> void:
 	if not _beam:
 		_beam = SpriteFrames.new()
 		_beam.remove_animation("default")
@@ -296,14 +309,53 @@ static func beam(tip: Vector2, dir: Vector2, length: float) -> void:
 	s.offset = Vector2(-3, -27.5)
 	s.position = tip
 	s.rotation = dir.angle()
-	s.scale = Vector2(length / 88.0, 1.0)
-	s.z_index = 8
+	s.scale = Vector2(length / 88.0, 0.55)
+	s.z_index = 0 if behind else 8
 	world.add_child(s)
 	s.play("play")
 	s.animation_finished.connect(s.queue_free)
-	var l := light(s, Color(0.75, 0.5, 1.0), 0.8, 0.8)
+	var l := light(s, Color(0.55, 0.3, 1.0), 0.8, 0.8)
 	l.position = Vector2(44, 0)
-	anim("spark", tip + Vector2(0, 0), 0.8, Color.WHITE, 0.0)
+	anim("spark", tip, 0.8, Color.WHITE, 0.0)
+	# twinkles mark the unseen band of gravity around the beam, wider than the beam itself
+	var tw := CPUParticles2D.new()
+	tw.amount = int(clampf(length / 5.0, 10.0, 48.0))
+	tw.lifetime = 0.55
+	tw.one_shot = true
+	tw.explosiveness = 0.7
+	tw.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	tw.emission_rect_extents = Vector2(length * 0.5, band)
+	tw.position = tip + dir * length * 0.5
+	tw.rotation = dir.angle()
+	tw.direction = Vector2(0, 1)
+	tw.spread = 180.0
+	tw.initial_velocity_min = 2.0
+	tw.initial_velocity_max = 10.0
+	tw.gravity = Vector2.ZERO
+	tw.texture = _twinkle()
+	var g := Gradient.new()
+	var c := Color(0.22, 0.1, 0.4) if dark_world else Color(0.8, 0.68, 1.0)
+	g.set_color(0, Color(c, 0.0))
+	g.add_point(0.25, Color(c, 1.0))
+	g.set_color(g.get_point_count() - 1, Color(c, 0.0))
+	tw.color_ramp = g
+	tw.z_index = 0 if behind else 9
+	world.add_child(tw)
+	tw.emitting = true
+	tw.get_tree().create_timer(1.0).timeout.connect(tw.queue_free)
+
+
+static var _tw_tex: ImageTexture
+
+
+static func _twinkle() -> Texture2D:
+	if not _tw_tex:
+		var im := Image.create(3, 3, false, Image.FORMAT_RGBA8)
+		for k in 3:
+			im.set_pixel(1, k, Color.WHITE)
+			im.set_pixel(k, 1, Color.WHITE)
+		_tw_tex = ImageTexture.create_from_image(im)
+	return _tw_tex
 
 
 static func _smoke_ramp(dark: Color, light_c: Color) -> Gradient:

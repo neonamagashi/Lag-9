@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cypyibssd732q"
-path="res://.godot/imported/idle_hair.png-b2a00397921b432d60e4a05abeb9cbb6.ctex"
+uid="uid://cp31vwuyhghoc"
+path="res://.godot/imported/whiskey_walk_right.png-b718b5759bf264e5661221a5f042a535.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/witch_white/idle_hair.png"
-dest_files=["res://.godot/imported/idle_hair.png-b2a00397921b432d60e4a05abeb9cbb6.ctex"]
+source_file="res://assets/cat/whiskey_walk_right.png"
+dest_files=["res://.godot/imported/whiskey_walk_right.png-b718b5759bf264e5661221a5f042a535.ctex"]
 
 [params]
 

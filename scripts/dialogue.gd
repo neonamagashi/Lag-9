@@ -18,10 +18,11 @@ var _shown := 0.0
 var _blip := 0
 var _done_t := 0.0
 var cps := CPS
+var width := 160.0
 var _cue_at := {}
 
 
-static func say(speaker: Node2D, line: String, v := "babble", p := 1.0, c := Color(0.12, 0.1, 0.16), h := 46.0, font := 8) -> Dialogue:
+static func say(speaker: Node2D, line: String, v := "babble", p := 1.0, c := Color(0.12, 0.1, 0.16), h := 46.0, font := 8, wide := 160.0) -> Dialogue:
 	for old in speaker.get_children():
 		if old is Dialogue:
 			old.queue_free()
@@ -32,6 +33,7 @@ static func say(speaker: Node2D, line: String, v := "babble", p := 1.0, c := Col
 	d.color = c
 	d.height = h
 	d.size = font
+	d.width = wide
 	d.hold = 1.6 + line.length() * 0.05
 	speaker.add_child(d)
 	return d
@@ -46,8 +48,8 @@ func _ready() -> void:
 	_label.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.9))
 	_label.add_theme_constant_override("outline_size", 3)
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label.custom_minimum_size = Vector2(160, 0)
-	_label.position = Vector2(-80, -height)
+	_label.custom_minimum_size = Vector2(width, 0)
+	_label.position = Vector2(-width * 0.5, -height)
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.visible_characters = 0
 	var i := text.find("*")

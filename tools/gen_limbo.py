@@ -76,31 +76,6 @@ def sit(src):
     return out
 
 
-def cat_walk(frames=4):
-    """Placeholder Whiskey: a ginger cat walking away, tail up."""
-    O, F, D2, L = (58, 30, 22, 255), (222, 140, 62, 255), (176, 98, 42, 255), (246, 196, 128, 255)
-    out = Image.new("RGBA", (16 * frames, 16))
-    for f in range(frames):
-        im = Image.new("RGBA", (16, 16))
-        d = ImageDraw.Draw(im)
-        step = f % 2
-        d.ellipse((4, 6, 11, 13), fill=F, outline=O)
-        d.line((5, 9, 10, 9), fill=D2)
-        d.line((5, 11, 10, 11), fill=D2)
-        d.ellipse((5, 2, 10, 7), fill=F, outline=O)
-        d.polygon([(5, 3), (5, 0), (7, 2)], fill=F, outline=O)
-        d.polygon([(10, 3), (10, 0), (8, 2)], fill=F, outline=O)
-        d.line((6, 4, 9, 4), fill=D2)
-        for lx, up in ((5, step), (9, 1 - step)):
-            d.rectangle((lx, 12, lx + 1, 14 - up), fill=F, outline=O)
-        sway = [0, 1, 0, -1][f]
-        d.line([(8, 12), (8 + sway, 9), (9 + sway, 6), (10 + sway * 2, 4)], fill=O, width=1)
-        d.line([(7, 12), (7 + sway, 9), (8 + sway, 6)], fill=F)
-        d.point((10 + sway * 2, 4), fill=L)
-        out.paste(im, (f * 16, 0))
-    return out
-
-
 def bubble(kind):
     """Thought bubble with a '?' or a plate of pancakes."""
     O, W = (60, 50, 80, 255), (255, 255, 255, 255)
@@ -127,6 +102,88 @@ def bubble(kind):
             d.line((x, 8, x, 8 + ln), fill=SYR)
         d.rectangle((20, 5, 23, 7), fill=BUT)
     return im
+
+
+MO, MD, MM, ML, MH = (92, 88, 104, 255), (160, 156, 172, 255), (200, 197, 210, 255), (228, 226, 234, 255), (246, 245, 250, 255)
+
+
+def _jag(rnd, x0, x1, y, depth):
+    pts = []
+    for x in range(x0, x1 + 1, 2):
+        pts.append((x, y + rnd.randint(0, depth)))
+    return pts
+
+
+def column(h, seed):
+    """A fluted marble column, snapped off at the top."""
+    rnd = random.Random(seed)
+    w = 26
+    im = Image.new("RGBA", (w, h + 4))
+    d = ImageDraw.Draw(im)
+    base = h - 5
+    top = _jag(rnd, 5, 20, 4, 6)
+    shaft = [(5, base)] + [(5, top[0][1])] + top + [(20, top[-1][1]), (20, base)]
+    d.polygon(shaft, fill=MM, outline=MO)
+    for fx in (8, 11, 14, 17):
+        d.line([(fx, max(p[1] for p in top) + 1), (fx, base - 1)], fill=MD)
+    d.line([(6, top[0][1] + 1), (6, base - 1)], fill=ML)
+    d.rectangle((2, base, 23, base + 4), fill=ML, outline=MO)
+    d.line((3, base + 3, 22, base + 3), fill=MD)
+    for c in range(rnd.randint(1, 2)):
+        cx = rnd.randint(8, 16)
+        cy = rnd.randint(top[0][1] + 6, base - 6)
+        d.line([(cx, cy), (cx + rnd.choice((-2, 2)), cy + 3), (cx + rnd.choice((-1, 1)), cy + 6)], fill=MO)
+    return im
+
+
+def drum():
+    """A toppled column section lying on its side."""
+    im = Image.new("RGBA", (34, 18))
+    d = ImageDraw.Draw(im)
+    d.rectangle((6, 3, 30, 15), fill=MM, outline=MO)
+    for y in (6, 9, 12):
+        d.line((7, y, 29, y), fill=MD)
+    d.line((7, 4, 29, 4), fill=ML)
+    d.ellipse((1, 3, 11, 15), fill=ML, outline=MO)
+    d.ellipse((4, 6, 8, 12), outline=MD)
+    return im
+
+
+def capital():
+    """A fallen capital with its scrolls."""
+    im = Image.new("RGBA", (34, 16))
+    d = ImageDraw.Draw(im)
+    d.rectangle((2, 3, 31, 8), fill=ML, outline=MO)
+    d.polygon([(7, 8), (26, 8), (23, 14), (10, 14)], fill=MM, outline=MO)
+    for cx in (5, 28):
+        d.ellipse((cx - 4, 2, cx + 4, 10), fill=ML, outline=MO)
+        d.ellipse((cx - 2, 4, cx + 2, 8), outline=MD)
+    return im
+
+
+def slab(w, h, seed):
+    """A flat stone block: lit top, shaded front, a chipped corner."""
+    rnd = random.Random(seed)
+    im = Image.new("RGBA", (w, h))
+    d = ImageDraw.Draw(im)
+    top = h // 2
+    d.rectangle((0, 0, w - 1, top), fill=ML, outline=MO)
+    d.rectangle((0, top, w - 1, h - 1), fill=MD, outline=MO)
+    d.line((1, 1, w - 2, 1), fill=MH)
+    c = rnd.randint(3, 6)
+    d.polygon([(w - 1 - c, 0), (w - 1, 0), (w - 1, c)], fill=(0, 0, 0, 0))
+    d.line([(w - 1 - c, 0), (w - 1, c)], fill=MO)
+    for k in range(rnd.randint(1, 3)):
+        x = rnd.randint(4, w - 6)
+        d.line([(x, top + 1), (x + 1, top + 3)], fill=MO)
+    return im
+
+
+def ruins():
+    pieces = {"column_tall": column(56, 1), "column_mid": column(38, 2), "column_short": column(24, 3),
+              "drum": drum(), "capital": capital(), "slab": slab(40, 16, 4), "slab_small": slab(26, 12, 5)}
+    for k, im in pieces.items():
+        im.save(f"{D}/ruin_{k}.png")
 
 
 def warden(frames=4):
@@ -294,7 +351,7 @@ for i, (t, c, style) in enumerate(VARIANTS):
         im.save(f"{D}/vagrant_{i}_{n}.png")
         if n == "idle":
             sit(im).save(f"{D}/vagrant_{i}_sit.png")
-cat_walk().save(f"{D}/whiskey_walk.png")
+ruins()
 bubble("q").save(f"{D}/think_q.png")
 bubble("pancakes").save(f"{D}/think_pancakes.png")
 b, p = warden2()

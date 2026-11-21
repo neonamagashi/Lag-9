@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://w0qtdt54txuq"
-path="res://.godot/imported/jump_hair.png-4fce8d58ea9dd66481ae957dca46722c.ctex"
+uid="uid://bdobxokwutbuc"
+path="res://.godot/imported/whiskey_walk_down_s.png-f4bb45cfd4e2df170407d9b44d40b9f4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/witch_white/jump_hair.png"
-dest_files=["res://.godot/imported/jump_hair.png-4fce8d58ea9dd66481ae957dca46722c.ctex"]
+source_file="res://assets/cat/whiskey_walk_down_s.png"
+dest_files=["res://.godot/imported/whiskey_walk_down_s.png-f4bb45cfd4e2df170407d9b44d40b9f4.ctex"]
 
 [params]
 

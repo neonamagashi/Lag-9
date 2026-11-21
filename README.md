@@ -9,12 +9,12 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 |---|---|
 | WASD | Move (she floats; Shift jumps) |
 | Mouse | Aim (a small rune circles her inner ring showing the direction) |
-| LMB (hold) | Pierce: she thrusts an open palm and a violet beam fires from it toward the cursor, hitting everything along it |
+| LMB (hold) | Pierce: she thrusts an open palm and a thin black beam with a purple glow fires toward the cursor. Twinkles mark a wider, unseen band of gravity around it: everything in the band takes damage and is shoved aside. Aiming within about 45° of straight up, she casts facing away (no hands) and the beam leaves from in front of her |
 | RMB | Grab: seize the enemy you're aiming at (any mob; bosses only if her level is at or above theirs) and hold it in front of you. RMB again (label switches to Release): hold to charge, release to fling it where you aim. While held it's crushed in an invisible fist (taking a little damage) and swings on a spring as you sweep your aim, smacking anything it hits |
 | F (hold, release) | Send: a runic smoke shockwave that pushes every enemy around her outward; impacts with walls or other enemies hurt |
 | T (hold, release) | Draw: the same wave pulled inward, dragging enemies into the crushing rings |
 | R | Rend: lift the 3 nearest enemies and tear them apart |
-| Space | Snap: teleport; the air rushes in behind her and her arrival billows smoke like dry ice |
+| Space (hold to charge) | Snap: black smoke curls in around her feet while charging; a longer charge teleports further (96 to 192 px). teleport; the air rushes in behind her and her arrival billows smoke like dry ice |
 | Shift / Mouse 5 (hold, release) | Jump: charge for height; clears ledges and objects, lands on the nearest open ground |
 | Q | Flip the field between Crush and Lift |
 | G | Singularity (60 mana): field grows 2.4x, black and white smoke billows beneath her |
@@ -24,7 +24,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F1 / F5 | Help / restart |
 
 ## Limbo (Circle 1)
-The game starts here, as a scripted scene (lines in `assets/dialogue/limbo.json`; `*word*` in a line is an action cue, e.g. `*buuurp*`). Black, then a blinding flash: she arrives hungover in a pure white void and sees Whiskey wandering off north, meowing. She drifts north at a slowed, swaying pace through a crowd of about 56 souls that gets denser toward the Warden: groups muttering to each other about nothing, loners mumbling to themselves, some sitting, some wandering. The smell gets to her and she throws up (a rainbow). At the Warden, Whiskey slips past him, they talk (her thought bubbles show she isn't listening), she throws up again, and only then can she press E to Begin. The souls drift away, her field and abilities awaken, and three waves attack. Afterwards the Warden lets her pass. The whole level has reverb. Whiskey is a placeholder sprite until the real cat art arrives.
+The game starts here, as a scripted scene (lines in `assets/dialogue/limbo.json`; `*word*` in a line is an action cue, e.g. `*buuurp*`). Black, then a blinding flash: she arrives hungover in a pure white void and sees Whiskey wandering off north, meowing. She drifts north at a slowed, swaying pace through a crowd of about 56 souls that gets denser toward the Warden: groups muttering to each other about nothing, loners mumbling to themselves, some sitting, some wandering. The smell gets to her and she throws up (a rainbow). At the Warden, Whiskey slips past him, they talk (her thought bubbles show she isn't listening), she throws up again, and only then can she press E to Begin. The souls drift away, her field and abilities awaken, and three waves attack. Afterwards the Warden lets her pass. Broken marble columns and slabs are scattered through the crowd, with souls sitting on them. At the Warden she's drawn in and anchored in front of him while the camera pulls back for the conversation, then pans in again for Begin. Striking the Warden does nothing but anger him: three warnings, then black smoke floods out of him faster than she can drift away, and Limbo starts over (later: back to her cabin). The whole level has reverb.
 
 Placeholder dialogue lives in `assets/dialogue/limbo.json` (edit the lines freely). Voices are babble sounds while text types out.
 

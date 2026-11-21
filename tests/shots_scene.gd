@@ -22,9 +22,9 @@ func _ready() -> void:
 		var line := _witch_line()
 		if line.begins_with("It's disturbingly") and not _taken.has("02"):
 			await _shot("02_people")
-		if w.keel > 0.95 and spew_t < 0:
+		if w.pose == "hunch" and w.pose_frame == 2 and spew_t < 0:
 			spew_t = t
-		if spew_t > 0 and t == spew_t + 70 and not _taken.has("03"):
+		if spew_t > 0 and t == spew_t + 14 and not _taken.has("03"):
 			await _shot("03_rainbow")
 		if main.limbo.stage == Limbo.Stage.WALK and w.global_position.y < -1500 and not _taken.has("04"):
 			await _shot("04_crowd")

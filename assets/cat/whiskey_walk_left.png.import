@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bur12jh554qg"
-path="res://.godot/imported/cast_hair.png-308674a14f87b7438b94d557eb918c86.ctex"
+uid="uid://ppreva4ndwr"
+path="res://.godot/imported/whiskey_walk_left.png-33aef6ba5e8d80daad3cbbee64fbd6fc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/witch_white/cast_hair.png"
-dest_files=["res://.godot/imported/cast_hair.png-308674a14f87b7438b94d557eb918c86.ctex"]
+source_file="res://assets/cat/whiskey_walk_left.png"
+dest_files=["res://.godot/imported/whiskey_walk_left.png-33aef6ba5e8d80daad3cbbee64fbd6fc.ctex"]
 
 [params]
 

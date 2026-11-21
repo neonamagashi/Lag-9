@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cc0die0iman4c"
-path="res://.godot/imported/hurt_hair.png-b76fc436fdb2186618833f8d4d1e7c29.ctex"
+uid="uid://bc2ogsfy7sooq"
+path="res://.godot/imported/ruin_slab.png-35869d912cbf7ff6da8690de1f168e71.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/witch_white/hurt_hair.png"
-dest_files=["res://.godot/imported/hurt_hair.png-b76fc436fdb2186618833f8d4d1e7c29.ctex"]
+source_file="res://assets/limbo/ruin_slab.png"
+dest_files=["res://.godot/imported/ruin_slab.png-35869d912cbf7ff6da8690de1f168e71.ctex"]
 
 [params]
 

@@ -4,7 +4,7 @@ extends CanvasLayer
 const SLOTS := [["pierce", "LMB", "Pierce"], ["grab", "RMB", "Grab"], ["send", "F", "Send"], ["draw", "T", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["jump", "Shft", "Jump"], ["singularity", "G", "Sing."]]
 const MAX_CD := {"pierce": Witch.PIERCE_CD, "grab": 0.4, "send": Witch.SEND_CD, "draw": Witch.DRAW_CD, "rend": Witch.REND_CD, "snap": Witch.SNAP_CD, "jump": 0.2, "singularity": Witch.SING_CD}
 const INK := Color(0.07, 0.05, 0.09)
-const HELP := "WASD move   LMB Pierce   RMB Grab, RMB again (hold) Release   F Send   T Draw   R Rend\nSpace Snap   Shift Jump (hold to charge)   Q Crush/Lift   G Singularity   1 Whisky   E Interact   Esc Settings"
+const HELP := "WASD move   LMB Pierce   RMB Grab, RMB again (hold) Release   F Send   T Draw   R Rend\nSpace Snap (hold to charge)   Shift Jump (hold to charge)   Q Crush/Lift   G Singularity   1 Whisky   E Interact   Esc Settings"
 
 var witch: Witch
 var main: Node
@@ -91,7 +91,8 @@ func _draw_hud() -> void:
 			var k: float = cd / MAX_CD[s[0]]
 			_canvas.draw_rect(Rect2(r.position + Vector2(0, r.size.y * (1.0 - k)), Vector2(r.size.x, r.size.y * k)), Color(0.05, 0.04, 0.07, 0.75))
 		var charge := {"send": [witch.send_charge, Witch.SEND_MAX_CHARGE], "draw": [witch.draw_charge, Witch.DRAW_MAX_CHARGE],
-			"grab": [witch.throw_charge, Witch.THROW_MAX_CHARGE], "jump": [witch.jump_charge, Witch.JUMP_MAX_CHARGE]}
+			"grab": [witch.throw_charge, Witch.THROW_MAX_CHARGE], "jump": [witch.jump_charge, Witch.JUMP_MAX_CHARGE],
+			"snap": [witch.snap_charge, Witch.SNAP_MAX_CHARGE]}
 		if charge.has(s[0]) and charge[s[0]][0] >= 0.0:
 			_canvas.draw_rect(Rect2(r.position, Vector2(r.size.x * charge[s[0]][0] / charge[s[0]][1], 2)), Color(0.75, 0.65, 1.0))
 		var tc := Color(0.75, 1.0, 0.95) if ready else Color(0.5, 0.48, 0.55)

@@ -1,6 +1,6 @@
 class_name Whiskey
 extends Node2D
-## Placeholder cat: walks to a point, meowing, and slips away.
+## Whiskey: walks to a point, meowing, and slips away.
 
 var target := Vector2.ZERO
 var speed := 70.0
@@ -12,12 +12,14 @@ var _audio: AudioStreamPlayer2D
 func _ready() -> void:
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
-	Sheets.add(sf, "walk", "res://assets/limbo/whiskey_walk.png", 16, 16, 4, 8.0, true)
+	for n in ["walk_up", "walk_down", "walk_left", "walk_right"]:
+		Sheets.add(sf, n, "res://assets/cat/whiskey_%s_s.png" % n, 32, 32, 6, 9.0, true)
+	Sheets.add(sf, "meow", "res://assets/cat/whiskey_meow_s.png", 32, 32, 3, 6.0, true)
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = sf
-	_sprite.offset = Vector2(0, -8)
+	_sprite.offset = Vector2(0, -10)
 	add_child(_sprite)
-	_sprite.play("walk")
+	_sprite.play("walk_up")
 	var sh := Node2D.new()
 	sh.z_index = -1
 	sh.draw.connect(func(): sh.draw_circle(Vector2.ZERO, 4.0, Color(0, 0, 0, 0.18)))
@@ -39,7 +41,10 @@ func _process(delta: float) -> void:
 			queue_free()
 		return
 	position += to.normalized() * speed * delta
-	_sprite.flip_h = to.x < 0.0
+	var d := to.normalized()
+	var anim := ("walk_up" if d.y < 0.0 else "walk_down") if absf(d.y) > absf(d.x) * 0.8 else ("walk_right" if d.x > 0.0 else "walk_left")
+	if _sprite.animation != anim:
+		_sprite.play(anim)
 	_meow_t -= delta
 	if _meow_t <= 0.0:
 		_meow_t = randf_range(1.4, 2.4)

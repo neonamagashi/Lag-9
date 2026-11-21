@@ -6,7 +6,8 @@
 - **Witch edits (glowing eyes, back view, aimable cast, jump pose):** derived from 9E0's frames for this project.
 - **Souls of Limbo:** recoloured and clothed from the character template by **Eris Esra**.
   "Original character template created by Eris Esra: https://erisesra.itch.io/character-templates-pack" (this credit and link are required if the game is free).
-- **Future use (not in game yet):** Retro Cats (Whisky?), Pixel Art Expression Sheets (dialogue portraits). TODO: confirm authors and licences.
+- **Whiskey:** black cat from the cat sprite pack ("PACK.zip", cat 1), eyes recoloured yellow and shrunk to half size by `tools/gen_cat.py`. TODO: author, store link and licence.
+- **Future use (not in game yet):** Retro Cats, Tiny Cat, Pixel Art Expression Sheets (dialogue portraits). TODO: confirm authors and licences.
 - **Monsters (goblin, skeleton, mushroom, flying eye):** "Monsters Creatures Fantasy" by LuizMelo, CC0,
   credit appreciated: https://luizmelo.itch.io/monsters-creatures-fantasy
 - **Monsters (rat, slime, bat, mimic):** "Monsters Creatures Fantasy 2", by the same artist.

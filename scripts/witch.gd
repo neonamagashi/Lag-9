@@ -9,7 +9,6 @@ const LIFT_COLOR := Color(1.0, 0.82, 0.4)
 const ELLIPSE := 0.6
 const PALM_PX := Vector2(39.0, 28.0)
 const SING_EYES := Color(1.0, 0.1, 0.08)
-const HAIR_PIVOT := 26.0
 
 # ---------- tuning ----------
 const SPEED := 118.0
@@ -39,6 +38,11 @@ const REND_DMG := 120.0
 const REND_LIFT_TIME := 0.55
 const SNAP_CD := 0.9
 const SNAP_DIST := 96.0
+const SNAP_MAX_DIST := 192.0
+const SNAP_MAX_CHARGE := 0.7
+const PIERCE_BAND := 20.0
+const NORTH_COS := 0.924
+const HUNCH_MOUTH := [Vector2(8.2, -19.9), Vector2(9.3, -18.5), Vector2(9.8, -17.6)]
 const JUMP_MAX_CHARGE := 0.6
 const JUMP_VZ := Vector2(170.0, 280.0)
 const SING_CD := 25.0
@@ -58,16 +62,21 @@ var send_charge := -1.0
 var draw_charge := -1.0
 var jump_charge := -1.0
 var throw_charge := -1.0
+var snap_charge := -1.0
 var held: Enemy
 var singularity_t := 0.0
 var dead := false
 var abilities_enabled := true
-## Scene control: frozen stops her moving, move_mult slows her, drunk sways her, keel bends her over (0-1).
+## Scene control: frozen stops her moving, move_mult slows her, drunk sways her, pose holds a frame (e.g. "hunch").
 var frozen := false
 var move_mult := 1.0
 var drunk := false
-var keel := 0.0
+var pose := ""
+var pose_frame := 0
 var _lean := 0.0
+var _north := false
+var _dip := 0.0
+var _snap_fx: CPUParticles2D
 var field_active := true
 var aim := Vector2.RIGHT
 var aim_point: Variant = null
@@ -82,8 +91,6 @@ var _sing_smoke: CPUParticles2D
 var field: GravityField
 var glow: PointLight2D
 var eyes: AnimatedSprite2D
-var hair: AnimatedSprite2D
-var hair_pivot: Node2D
 var charge_hand: AnimatedSprite2D
 var charge_dust: AnimatedSprite2D
 var _tint: ColorRect
@@ -104,15 +111,14 @@ func _ready() -> void:
 	add_child(col)
 	var sf := SpriteFrames.new()
 	var ef := SpriteFrames.new()
-	var hf := SpriteFrames.new()
 	sf.remove_animation("default")
 	ef.remove_animation("default")
-	hf.remove_animation("default")
 	var defs := [
 		["idle", "idle", 64, 64, 6, 8.0, true, 0],
 		["hurt", "hurt", 64, 64, 3, 12.0, false, 0], ["death", "death", 64, 64, 11, 10.0, false, 0],
 		["cast", "cast", 44, 47, 2, 20.0, false, 0], ["cast_hold", "cast", 44, 47, 6, 14.0, true, 1],
 		["jump", "jump", 54, 64, 8, 12.0, true, 0],
+		["hunch", "hunch", 64, 64, 3, 6.0, false, 0], ["cast_n", "cast_n", 64, 64, 6, 10.0, true, 0],
 	]
 	for d in defs:
 		Sheets.add(sf, d[0], DIR % d[1], d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
@@ -120,9 +126,8 @@ func _ready() -> void:
 		if ResourceLoader.exists(DIR % (d[1] + "_back")):
 			Sheets.add(sf, d[0] + "_back", DIR % (d[1] + "_back"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
 			Sheets.add(ef, d[0] + "_back", DIR % (d[1] + "_eyes"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
-			Sheets.add(hf, d[0] + "_back", DIR % (d[1] + "_hair"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
 	var base := {"idle": Vector3(23, 62, 64), "hurt": Vector3(23, 62, 64), "death": Vector3(23, 62, 64),
-		"cast": Vector3(27, 45, 44), "cast_hold": Vector3(27, 45, 44), "jump": Vector3(35, 62, 54)}
+		"cast": Vector3(27, 45, 44), "cast_hold": Vector3(27, 45, 44), "hunch": Vector3(23, 62, 64), "cast_n": Vector3(23, 62, 64), "jump": Vector3(35, 62, 54)}
 	for k in base:
 		anchors[k] = base[k]
 		anchors[k + "_back"] = base[k]
@@ -134,14 +139,6 @@ func _ready() -> void:
 	unshaded.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	eyes.material = unshaded
 	visual.add_child(eyes)
-	# back view: her loose hair is its own layer, pivoting at the head so it can trail behind her
-	hair_pivot = Node2D.new()
-	hair_pivot.position = Vector2(0, -HAIR_PIVOT)
-	visual.add_child(hair_pivot)
-	hair = AnimatedSprite2D.new()
-	hair.sprite_frames = hf
-	hair.centered = false
-	hair_pivot.add_child(hair)
 	var cf := SpriteFrames.new()
 	cf.remove_animation("default")
 	Sheets.add(cf, "hand", DIR % "charge_hand", 40, 32, 10, 1.0, false, true)
@@ -160,6 +157,30 @@ func _ready() -> void:
 	charge_dust.z_index = -1
 	charge_dust.visible = false
 	add_child(charge_dust)
+	# Snap prep: black smoke curling in around her feet
+	_snap_fx = CPUParticles2D.new()
+	_snap_fx.amount = 30
+	_snap_fx.lifetime = 0.45
+	_snap_fx.emitting = false
+	_snap_fx.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE_SURFACE
+	_snap_fx.emission_sphere_radius = 16.0
+	_snap_fx.scale = Vector2(1.0, ELLIPSE)
+	_snap_fx.gravity = Vector2.ZERO
+	_snap_fx.radial_accel_min = -90.0
+	_snap_fx.radial_accel_max = -60.0
+	_snap_fx.tangential_accel_min = 40.0
+	_snap_fx.tangential_accel_max = 70.0
+	_snap_fx.texture = Fx.soft()
+	_snap_fx.scale_amount_min = 0.3
+	_snap_fx.scale_amount_max = 0.6
+	var sg := Gradient.new()
+	sg.set_color(0, Color(0.02, 0.0, 0.04, 0.0))
+	sg.add_point(0.3, Color(0.04, 0.01, 0.07, 0.8))
+	sg.add_point(0.8, Color(0.3, 0.16, 0.55, 0.5))
+	sg.set_color(sg.get_point_count() - 1, Color(0.4, 0.25, 0.7, 0.0))
+	_snap_fx.color_ramp = sg
+	_snap_fx.z_index = -1
+	add_child(_snap_fx)
 	var tl := CanvasLayer.new()
 	tl.layer = 4
 	add_child(tl)
@@ -186,23 +207,14 @@ func _update_visual(delta: float) -> void:
 	if drunk:
 		visual.skew += sin(_t * 1.3) * 0.06 + sin(_t * 2.9) * 0.02
 		visual.position.x += sin(_t * 0.8) * 1.2
-	if keel > 0.0:
-		visual.skew += keel * 0.55 * facing
-		visual.scale.y *= 1.0 - 0.14 * keel
+	_dip = move_toward(_dip, 0.0, delta * 3.0)
+	if _dip > 0.0:
+		visual.position.y += 2.5 * _dip
+		visual.scale.y *= 1.0 - 0.1 * _dip
 	eyes.animation = sprite.animation
 	eyes.frame = sprite.frame
 	eyes.flip_h = sprite.flip_h
 	eyes.offset = sprite.offset
-	hair.visible = _back and hf_has(sprite.animation)
-	if hair.visible:
-		hair.animation = sprite.animation
-		hair.frame = sprite.frame
-		hair.flip_h = sprite.flip_h
-		hair.offset = sprite.offset + Vector2(0, HAIR_PIVOT)
-		var trail := -clampf(velocity.x / SPEED, -1.0, 1.0) * 0.35 + sin(_t * 2.3) * 0.05
-		hair_pivot.skew = lerpf(hair_pivot.skew, trail, 1.0 - exp(-delta * 5.0))
-		var stream := clampf(-velocity.y / SPEED, 0.0, 1.0)
-		hair_pivot.scale.y = lerpf(hair_pivot.scale.y, 1.0 + 0.1 * stream + 0.02 * sin(_t * 3.1), 1.0 - exp(-delta * 5.0))
 	# eyes are purple pixels in the sprite; this mask paints them red in Singularity
 	_sing_k = move_toward(_sing_k, 1.0 if singularity_t > 0.0 else 0.0, delta * 2.5)
 	eyes.visible = not _back and _sing_k > 0.01
@@ -238,6 +250,7 @@ func _physics_process(delta: float) -> void:
 	if _sing_smoke:
 		_sing_smoke.emission_sphere_radius = R_INNER * 0.7
 	if dead:
+		_snap_fx.emitting = false
 		velocity = velocity.move_toward(Vector2.ZERO, ACCEL * delta)
 		move_and_slide()
 		_update_visual(delta)
@@ -247,7 +260,7 @@ func _physics_process(delta: float) -> void:
 	if aim == Vector2.ZERO:
 		aim = Vector2.RIGHT * facing
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down") if not frozen else Vector2.ZERO
-	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0
+	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0 or snap_charge >= 0.0
 	var spd := SPEED * (0.45 if charging else 1.0) * move_mult
 	velocity = velocity.move_toward(dir * spd, ACCEL * delta * (0.35 if z > 0.0 else 1.0))
 	collision_mask = 8 if z > 6.0 else 1 | 8
@@ -281,7 +294,19 @@ func _abilities(delta: float, dir: Vector2) -> void:
 				if e.lifted:
 					e.slam()
 	if Input.is_action_just_pressed("snap") and cooldowns.snap <= 0.0:
-		_teleport(dir.normalized() if dir.length() > 0.1 else aim)
+		snap_charge = 0.0
+		_snap_fx.emitting = true
+		Sfx.play("pull_wave", 0.1, -16.0, 1.6)
+	if snap_charge >= 0.0:
+		snap_charge = minf(snap_charge + delta, SNAP_MAX_CHARGE)
+		squash = 0.08 + 0.12 * snap_charge / SNAP_MAX_CHARGE
+		_snap_fx.emission_sphere_radius = lerpf(16.0, 9.0, snap_charge / SNAP_MAX_CHARGE)
+		if not Input.is_action_pressed("snap"):
+			var k := snap_charge / SNAP_MAX_CHARGE
+			snap_charge = -1.0
+			squash = 0.0
+			_snap_fx.emitting = false
+			_teleport(dir.normalized() if dir.length() > 0.1 else aim, lerpf(SNAP_DIST, SNAP_MAX_DIST, k))
 	if Input.is_action_pressed("pierce") and cooldowns.pierce <= 0.0:
 		_pierce()
 	_grab_input(delta)
@@ -312,6 +337,18 @@ func _abilities(delta: float, dir: Vector2) -> void:
 
 
 func _animate(dir: Vector2) -> void:
+	if pose != "":
+		_back = false
+		play(pose)
+		sprite.pause()
+		sprite.frame = pose_frame
+		return
+	if _cast_t <= 0.0:
+		_north = false
+	if _north:
+		play("cast_n")
+		_back = true
+		return
 	var casting := _cast_t > 0.0 or throw_charge >= 0.0 or held != null
 	if casting:
 		if absf(aim.x) > 0.15:
@@ -343,10 +380,6 @@ func _animate(dir: Vector2) -> void:
 
 
 # ---------- abilities ----------
-func hf_has(anim: String) -> bool:
-	return hair.sprite_frames.has_animation(anim)
-
-
 ## Where her palm is in the casting pose, through the sprite's real transform (hover, lean, squash).
 func hand_tip() -> Vector2:
 	return global_position + visual.transform * _palm_local()
@@ -386,10 +419,18 @@ func _update_charge_fx() -> void:
 func _pierce() -> void:
 	cooldowns.pierce = PIERCE_CD
 	_cast_t = 0.42
-	if aim.x != 0.0:
-		facing = 1 if aim.x > 0 else -1
-	play("cast_back" if _back else "cast", true)
-	var tip := hand_tip()
+	_dip = 1.0
+	_north = aim.y < -NORTH_COS
+	var tip: Vector2
+	if _north:
+		# facing away: no hands, the beam leaves from in front of her
+		play("cast_n", true)
+		tip = global_position + Vector2(0, -24.0 - z - hover)
+	else:
+		if aim.x != 0.0:
+			facing = 1 if aim.x > 0 else -1
+		play("cast_back" if _back else "cast", true)
+		tip = hand_tip()
 	var target: Vector2 = aim_point if aim_point != null else get_global_mouse_position()
 	var dir := (target - tip).normalized()
 	if dir == Vector2.ZERO:
@@ -400,16 +441,27 @@ func _pierce() -> void:
 	var hit := get_world_2d().direct_space_state.intersect_ray(q)
 	if hit:
 		length = ground.distance_to(hit.position) + 6.0
-	Fx.beam(tip, dir, length)
+	Fx.beam(tip, dir, length, _north, PIERCE_BAND)
 	Sfx.play("beam", 0.08, -8.0)
+	# the beam is a thin core inside a wider, unseen band of gravity: the band hurts too and shoves aside
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e.dead or e.dormant:
 			continue
 		var c: Vector2 = e.global_position - Vector2(0, e.z + e.body_height * 0.5)
 		var t := clampf((c - tip).dot(dir), 0.0, length)
-		if (tip + dir * t).distance_to(c) < e.hit_radius + 7.0:
+		var on := tip + dir * t
+		var d := on.distance_to(c)
+		if d < e.hit_radius + 4.0:
 			e.hit(PIERCE_DMG, dir * 50.0)
 			Fx.anim("cross", c + Vector2(0, e.body_height * 0.5), 0.5, Color.WHITE, e.body_height * 0.5)
+		elif d < e.hit_radius + PIERCE_BAND:
+			var away := (c - on).normalized() if d > 0.5 else dir.orthogonal()
+			e.hit(PIERCE_DMG * 0.6, away * 140.0)
+	for n in get_tree().get_nodes_in_group("immune"):
+		var c2: Vector2 = n.global_position
+		var t2 := clampf((c2 - ground).dot(dir), 0.0, length + 10.0)
+		if (ground + dir * t2).distance_to(c2) < n.get_meta("radius", 20.0) + PIERCE_BAND:
+			n.get_meta("on_hit").call()
 
 
 func _grab_input(delta: float) -> void:
@@ -479,6 +531,9 @@ func _push(k: float) -> void:
 		if field_dist(e.global_position) < rng:
 			var d := to.normalized() if to.length() > 1.0 else Vector2.RIGHT.rotated(randf() * TAU)
 			e.knock(d, lerpf(180.0, 420.0, k), lerpf(5.0, 14.0, k))
+	for n in get_tree().get_nodes_in_group("immune"):
+		if field_dist(n.global_position) < rng + n.get_meta("radius", 20.0):
+			n.get_meta("on_hit").call()
 	Fx.wave(global_position, r_inner(), rng, 0.35 + 0.1 * k, false)
 	Sfx.play("push_wave", 0.05, -6.0 + 4.0 * k)
 	Fx.shake(1.5 + 2.5 * k)
@@ -545,9 +600,9 @@ func _land() -> void:
 	squash = 0.2
 
 
-func _teleport(dir: Vector2) -> void:
+func _teleport(dir: Vector2, dist := SNAP_DIST) -> void:
 	var from := global_position
-	var to := from + dir * SNAP_DIST
+	var to := from + dir * dist
 	var space := get_world_2d().direct_space_state
 	var shape := CircleShape2D.new()
 	shape.radius = 6.0
@@ -555,14 +610,14 @@ func _teleport(dir: Vector2) -> void:
 	q.shape = shape
 	q.collision_mask = 1 | 8
 	var step := 0.0
-	while step < SNAP_DIST:
-		q.transform = Transform2D(0, from.lerp(to, 1.0 - step / SNAP_DIST))
+	while step < dist:
+		q.transform = Transform2D(0, from.lerp(to, 1.0 - step / dist))
 		if space.intersect_shape(q, 1).is_empty():
 			break
 		step += 4.0
-	if step >= SNAP_DIST:
+	if step >= dist:
 		return
-	to = from.lerp(to, 1.0 - step / SNAP_DIST)
+	to = from.lerp(to, 1.0 - step / dist)
 	cooldowns.snap = SNAP_CD
 	_iframes = 0.3
 	send_charge = -1.0

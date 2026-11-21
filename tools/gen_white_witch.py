@@ -139,10 +139,11 @@ def palm_orb(fr, hand, big):
     fr = fr.copy()
     px = fr.load()
     hx, hy = hand[0] + 1, hand[1]
-    pts = {(0, 0): EYE_CORE, (1, 0): EYE_LIT, (-1, 0): EYE_LIT, (0, 1): EYE_LIT, (0, -1): EYE_LIT,
-           (1, 1): EYE_EDGE, (-1, 1): EYE_EDGE, (1, -1): EYE_EDGE, (-1, -1): EYE_EDGE}
+    core, ring, rim = (14, 5, 26, 255), (60, 26, 112, 255), (130, 82, 230, 255)
+    pts = {(0, 0): core, (1, 0): ring, (-1, 0): ring, (0, 1): ring, (0, -1): ring,
+           (1, 1): rim, (-1, 1): rim, (1, -1): rim, (-1, -1): rim}
     if big:
-        pts.update({(2, 0): EYE_EDGE, (0, 2): EYE_EDGE, (0, -2): EYE_EDGE})
+        pts.update({(2, 0): rim, (0, 2): rim, (0, -2): rim, (-2, 0): rim})
     for (dx, dy), c in pts.items():
         x, y = hx + dx, hy + dy
         if 0 <= x < fr.width and 0 <= y < fr.height:
@@ -151,67 +152,31 @@ def palm_orb(fr, hand, big):
 
 
 def backify(fr, f=0, n=6):
-    """Seen from behind: the face is gone under her hair, which falls loose down her back."""
+    """From behind: exactly the front frame, with the face filled in as the back of her head."""
     fr = dewand(fr)
     px = fr.load()
     w, h = fr.size
     box = face_box(fr)
     if not box:
-        return fr, Image.new("RGBA", fr.size)
-    top = box[1] + 1
-    hair = {HAIR[:3], HAIR_D[:3]}
-    opaque = lambda x, y: 0 <= x < w and 0 <= y < h and px[x, y][3] == 255
-    rows = [y for y in range(h) if any(px[x, y][3] == 255 for x in range(w))]
-    bottom = max(rows)
-    base_end = top + int((bottom - top) * 0.6)
-    # which way the loose hair is already streaming (cast frames blow it sideways)
-    left = sum(1 for y in range(h) for x in range(0, box[0] - 4) if px[x, y][:3] in hair)
-    right = sum(1 for y in range(h) for x in range(box[2] + 4, w) if px[x, y][:3] in hair)
-    blow = -1 if left > right + 6 else (1 if right > left + 6 else 0)
-    cx = (box[0] + box[2]) / 2.0
-    painted = {}
-    for y in range(top, base_end + 4):
-        xs = [x for x in range(w) if opaque(x, y) and px[x, y][:3] not in hair]
-        near = [x for x in xs if abs(x - cx) < 14]
-        if not near:
-            continue
-        xl, xr = max(min(near), int(cx) - 8), min(max(near), int(cx) + 7)
-        if y < top + 3:
-            xl, xr = max(xl, box[0] + 1), min(xr, box[2] - 1)
-        else:
-            xl, xr = xl - (1 if y > top + 4 else 0), xr + (1 if y > top + 4 else 0)
-        for x in range(xl, xr + 1):
-            drift = blow * max(0, y - top - 6) // 4
-            end = base_end + round(0.7 * math.sin((x - drift) * 0.6 + f * 0.9)) + (1 if (x - cx) * (blow or -1) > 2 else 0)
-            if y > end:
-                continue
-            painted[(x, y)] = end
-    # the cap over her head stays on the body; the rest is a separate layer that sways
-    cap = top + 3
-    for (x, y) in painted:
-        if y <= cap:
-            px[x, y] = HAIR
-    layer = Image.new("RGBA", fr.size)
-    lp = layer.load()
-    length = max(1, base_end - top)
-    swing = math.sin(f / n * math.tau)
-    moved = {}
-    for (x, y), end in painted.items():
-        t = max(0.0, (y - top) / length)
-        dx = round(2.2 * t ** 1.5 * swing)
-        moved[(x + dx, y)] = end + dx * 0
-    for (x, y) in moved:
-        if 0 <= x < w:
-            lp[x, y] = HAIR
-    for (x, y), end in moved.items():
-        if not 0 <= x < w:
-            continue
-        # one solid mass like the front: shaded only along its outline and the shadow side
-        edge = (x - 1, y) not in moved or (x + 1, y) not in moved or (x, y + 1) not in moved
-        shadow = (x + 1, y) in moved and (x + 2, y) not in moved and y > top + 2
-        if edge or shadow:
-            lp[x, y] = HAIR_D
-    return fr, layer
+        return fr
+    top = box[1] + 2
+    face = {c[:3] for c in FACE} | DARKS | {EYE_LIT[:3], EYE_PUPIL[:3]}
+    filled = set()
+    for y in range(top - 1, min(h, top + 5)):
+        for x in range(box[0] + 1, box[2]):
+            p = px[x, y]
+            if p[3] and (p[:3] in face or reddish(p)) and y < top + 4:
+                filled.add((x, y))
+            elif p[3] and p[:3] in DARKS and y == top + 4 and (x, y - 1) in filled:
+                filled.add((x, y))
+    for (x, y) in filled:
+        px[x, y] = HAIR
+    for (x, y) in filled:
+        edge_l = (x - 1, y) not in filled and px[x - 1, y][:3] not in (HAIR[:3], HAIR_D[:3])
+        edge_r = (x + 1, y) not in filled and px[x + 1, y][:3] not in (HAIR[:3], HAIR_D[:3])
+        if edge_l or edge_r or (x, y + 1) not in filled and y >= top + 3:
+            px[x, y] = HAIR_D
+    return fr
 
 
 PALETTE = set()
@@ -236,9 +201,7 @@ def save(name, frs, back=False, palette_only=False):
     stack([r[0] for r in rc]).save(f"{D}/{name}.png")
     stack([r[1] for r in rc]).save(f"{D}/{name}_eyes.png")
     if back:
-        bk = [backify(f, i, len(frs)) for i, f in enumerate(frs)]
-        stack([b[0] for b in bk]).save(f"{D}/{name}_back.png")
-        stack([b[1] for b in bk]).save(f"{D}/{name}_hair.png")
+        stack([backify(f, i, len(frs)) for i, f in enumerate(frs)]).save(f"{D}/{name}_back.png")
     print(name, len(frs), frs[0].size)
 
 
@@ -272,7 +235,7 @@ for n, fh in [("idle", 64), ("hurt", 64), ("death", 64), ("cast", 47), ("jump", 
 
 SKINS = {(226, 184, 161), (230, 209, 184), (225, 184, 162), (229, 209, 185), (172, 137, 120)}
 PALE = {(217, 217, 206), (191, 191, 182)}
-VIOLET = [(110, 60, 180), (150, 90, 230), (190, 130, 255), (232, 200, 255)]
+VIOLET = [(130, 82, 230), (84, 40, 160), (36, 14, 66), (12, 4, 22)]
 
 
 def charge_fx():
@@ -292,7 +255,7 @@ def charge_fx():
                     continue
                 if p[:3] in PALE and y >= 34:
                     if 0 <= y - 34 < 28 and x < 90:
-                        dp[x, y - 34] = (176, 164, 214, min(255, p[3] if p[3] < 255 else 200))
+                        dp[x, y - 34] = (46, 30, 70, min(230, p[3] if p[3] < 255 else 190))
                 elif x >= 52 and 13 <= y < 45 and p[:3] not in SKINS and sum(p[:3]) > 250:
                     lum = sum(p[:3]) / 3.0
                     c = VIOLET[min(3, int((lum - 80) / 45))]
@@ -306,3 +269,70 @@ def charge_fx():
 
 
 charge_fx()
+
+
+HUNCH_PIVOT = (22, 50)
+
+
+def hunch(fr, deg):
+    """Bent over at the waist (hands on knees): the upper body tips forward around the hips."""
+    sp = fr.load()
+    out = Image.new("RGBA", fr.size)
+    op = out.load()
+    pxv, pyv = HUNCH_PIVOT
+    th = math.radians(deg)
+    c, s = math.cos(th), math.sin(th)
+    cloak = {(59, 50, 74), (41, 35, 51)}
+    for y in range(pyv, 64):
+        for x in range(64):
+            if sp[x, y][3] and sp[x, y][:3] != SKIN[:3]:
+                op[x, y] = sp[x, y]
+    hips = [x for x in range(64) if sp[x, pyv][3] and sp[x, pyv][:3] in cloak]
+    for y in range(pyv - 4, pyv):
+        for x in range(min(hips), max(hips) + 1):
+            op[x, y] = (41, 35, 51, 255) if x == min(hips) else (59, 50, 74, 255)
+    for Y in range(64):
+        for X in range(64):
+            dx, dy = X - pxv, Y - pyv
+            ix, iy = int(round(pxv + dx * c + dy * s)), int(round(pyv - dx * s + dy * c))
+            if 0 <= ix < 64 and 0 <= iy < pyv and sp[ix, iy][3]:
+                if sp[ix, iy][:3] == SKIN[:3] and iy > 42:
+                    continue
+                op[X, Y] = sp[ix, iy]
+    # arm braced on the knee
+    sx, sy = pxv + (2 * c + 10 * s), pyv + (2 * s - 10 * c)
+    kx, ky = 28, 54
+    for i in range(9):
+        t = i / 8.0
+        x, y = round(sx + (kx - sx) * t), round(sy + (ky - sy) * t)
+        op[x, y] = (41, 35, 51, 255)
+        op[x - 1, y] = (59, 50, 74, 255)
+    op[kx, ky + 1] = SKIN
+    op[kx + 1, ky + 1] = SKIN
+    mouth = (pxv + 2 * c + 12 * s, pyv + 2 * s - 12 * c)
+    return out, mouth
+
+
+base = Image.open(f"{D}/idle.png").convert("RGBA").crop((0, 0, 64, 64))
+hs = [hunch(base, d) for d in (40, 48, 53)]
+stack([h[0] for h in hs]).save(f"{D}/hunch.png")
+stack([Image.new("RGBA", (64, 64)) for _ in hs]).save(f"{D}/hunch_eyes.png")
+print("hunch mouths", [(round(m[0] - 23, 1), round(m[1] - 62, 1)) for _, m in hs])
+
+
+def north_cast(fr):
+    """Seen from behind, casting forward: the back view with her hands tucked away."""
+    fr = fr.copy()
+    px = fr.load()
+    for y in range(fr.height):
+        for x in range(fr.width):
+            if px[x, y][3] and px[x, y][:3] == SKIN[:3]:
+                inside = 0 < x < fr.width - 1 and px[x - 1, y][3] and px[x + 1, y][3]
+                px[x, y] = (59, 50, 74, 255) if inside else (0, 0, 0, 0)
+    return fr
+
+
+ib = Image.open(f"{D}/idle_back.png").convert("RGBA")
+nc = [north_cast(ib.crop((0, i * 64, 64, (i + 1) * 64))) for i in range(ib.height // 64)]
+stack(nc).save(f"{D}/cast_n.png")
+stack([Image.new("RGBA", (64, 64)) for _ in nc]).save(f"{D}/cast_n_eyes.png")

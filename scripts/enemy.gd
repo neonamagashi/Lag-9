@@ -307,7 +307,7 @@ func _physics_process(delta: float) -> void:
 func _steer(goal: Vector2, dt: float) -> Vector2:
 	var level: TiledLevel = Fx.world.get_meta("main").level
 	var direct := (goal - global_position).normalized()
-	if not level or _fly_z > 0.0:
+	if not level:
 		return direct
 	var q := PhysicsRayQueryParameters2D.create(global_position, goal, 1)
 	if not get_world_2d().direct_space_state.intersect_ray(q):

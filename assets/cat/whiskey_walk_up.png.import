@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://drd7p8103mj6c"
-path="res://.godot/imported/whiskey_walk.png-962e27939d7b3f35e606f87c283116ec.ctex"
+uid="uid://dea7ia5iutmox"
+path="res://.godot/imported/whiskey_walk_up.png-238474db7b61b873bd61179cf91c4db8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/limbo/whiskey_walk.png"
-dest_files=["res://.godot/imported/whiskey_walk.png-962e27939d7b3f35e606f87c283116ec.ctex"]
+source_file="res://assets/cat/whiskey_walk_up.png"
+dest_files=["res://.godot/imported/whiskey_walk_up.png-238474db7b61b873bd61179cf91c4db8.ctex"]
 
 [params]
 

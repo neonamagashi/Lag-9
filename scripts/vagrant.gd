@@ -12,6 +12,8 @@ var variant := 0
 var mode := Mode.WANDER
 var face := Vector2.DOWN
 var solo := true
+## Height of whatever she's sitting on (a slab, a fallen drum).
+var seat := 0.0
 var home := Vector2.ZERO
 var leaving := false
 var _sprite: AnimatedSprite2D
@@ -51,7 +53,7 @@ func _ready() -> void:
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = sf
 	_sprite.offset = Vector2(0, -16)
-	_sprite.position = Vector2(0, 1)
+	_sprite.position = Vector2(0, 1 - seat)
 	add_child(_sprite)
 	_sprite.play("sit" if mode == Mode.SIT else "idle_down")
 	_sprite.frame = randi() % 4
@@ -137,3 +139,6 @@ func leave(from: Vector2) -> void:
 		away = Vector2.DOWN
 	_target = global_position + away.rotated(randf_range(-0.5, 0.5)) * 400.0
 	_wait = randf_range(0.0, 0.8) + (0.6 if mode == Mode.SIT else 0.0)
+	if seat > 0.0:
+		var t := create_tween()
+		t.tween_property(_sprite, "position:y", 1.0, 0.3)
