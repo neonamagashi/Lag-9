@@ -9,6 +9,7 @@ const LIFT_COLOR := Color(1.0, 0.82, 0.4)
 const ELLIPSE := 0.6
 const PALM_PX := Vector2(39.0, 28.0)
 const SING_EYES := Color(1.0, 0.1, 0.08)
+const HAIR_PIVOT := 26.0
 
 # ---------- tuning ----------
 const SPEED := 118.0
@@ -75,6 +76,8 @@ var _sing_smoke: CPUParticles2D
 var field: GravityField
 var glow: PointLight2D
 var eyes: AnimatedSprite2D
+var hair: AnimatedSprite2D
+var hair_pivot: Node2D
 var charge_hand: AnimatedSprite2D
 var charge_dust: AnimatedSprite2D
 var _tint: ColorRect
@@ -95,8 +98,10 @@ func _ready() -> void:
 	add_child(col)
 	var sf := SpriteFrames.new()
 	var ef := SpriteFrames.new()
+	var hf := SpriteFrames.new()
 	sf.remove_animation("default")
 	ef.remove_animation("default")
+	hf.remove_animation("default")
 	var defs := [
 		["idle", "idle", 64, 64, 6, 8.0, true, 0],
 		["hurt", "hurt", 64, 64, 3, 12.0, false, 0], ["death", "death", 64, 64, 11, 10.0, false, 0],
@@ -109,6 +114,7 @@ func _ready() -> void:
 		if ResourceLoader.exists(DIR % (d[1] + "_back")):
 			Sheets.add(sf, d[0] + "_back", DIR % (d[1] + "_back"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
 			Sheets.add(ef, d[0] + "_back", DIR % (d[1] + "_eyes"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
+			Sheets.add(hf, d[0] + "_back", DIR % (d[1] + "_hair"), d[2], d[3], d[4], d[5], d[6], true, Rect2i(), d[7])
 	var base := {"idle": Vector3(23, 62, 64), "hurt": Vector3(23, 62, 64), "death": Vector3(23, 62, 64),
 		"cast": Vector3(27, 45, 44), "cast_hold": Vector3(27, 45, 44), "jump": Vector3(35, 62, 54)}
 	for k in base:
@@ -122,6 +128,14 @@ func _ready() -> void:
 	unshaded.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	eyes.material = unshaded
 	visual.add_child(eyes)
+	# back view: her loose hair is its own layer, pivoting at the head so it can trail behind her
+	hair_pivot = Node2D.new()
+	hair_pivot.position = Vector2(0, -HAIR_PIVOT)
+	visual.add_child(hair_pivot)
+	hair = AnimatedSprite2D.new()
+	hair.sprite_frames = hf
+	hair.centered = false
+	hair_pivot.add_child(hair)
 	var cf := SpriteFrames.new()
 	cf.remove_animation("default")
 	Sheets.add(cf, "hand", DIR % "charge_hand", 40, 32, 10, 1.0, false, true)
@@ -166,6 +180,16 @@ func _update_visual(delta: float) -> void:
 	eyes.frame = sprite.frame
 	eyes.flip_h = sprite.flip_h
 	eyes.offset = sprite.offset
+	hair.visible = _back and hf_has(sprite.animation)
+	if hair.visible:
+		hair.animation = sprite.animation
+		hair.frame = sprite.frame
+		hair.flip_h = sprite.flip_h
+		hair.offset = sprite.offset + Vector2(0, HAIR_PIVOT)
+		var trail := -clampf(velocity.x / SPEED, -1.0, 1.0) * 0.35 + sin(_t * 2.3) * 0.05
+		hair_pivot.skew = lerpf(hair_pivot.skew, trail, 1.0 - exp(-delta * 5.0))
+		var stream := clampf(-velocity.y / SPEED, 0.0, 1.0)
+		hair_pivot.scale.y = lerpf(hair_pivot.scale.y, 1.0 + 0.1 * stream + 0.02 * sin(_t * 3.1), 1.0 - exp(-delta * 5.0))
 	# eyes are purple pixels in the sprite; this mask paints them red in Singularity
 	_sing_k = move_toward(_sing_k, 1.0 if singularity_t > 0.0 else 0.0, delta * 2.5)
 	eyes.visible = not _back and _sing_k > 0.01
@@ -306,6 +330,10 @@ func _animate(dir: Vector2) -> void:
 
 
 # ---------- abilities ----------
+func hf_has(anim: String) -> bool:
+	return hair.sprite_frames.has_animation(anim)
+
+
 ## Where her palm is in the casting pose, through the sprite's real transform (hover, lean, squash).
 func hand_tip() -> Vector2:
 	return global_position + visual.transform * _palm_local()

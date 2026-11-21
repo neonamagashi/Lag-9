@@ -8,7 +8,7 @@ SKIN = (230, 209, 184, 255)
 EYE = (212, 117, 100, 255)
 FACE = {SKIN, EYE, (146, 81, 69, 255), (158, 144, 127, 255)}
 EYE_CORE, EYE_EDGE = (226, 170, 255, 255), (150, 70, 230, 255)
-EYE_LIT, EYE_PUPIL = (206, 150, 255, 255), (138, 78, 226, 255)
+EYE_LIT, EYE_PUPIL = (150, 84, 228, 255), (22, 14, 32, 255)
 DARKS = {(59, 50, 74), (41, 35, 51), (64, 81, 98), (51, 70, 82), (54, 46, 67)}
 TEALS = {(79, 164, 165), (55, 113, 114), (43, 84, 96), (37, 68, 84), (98, 196, 191), (159, 214, 210)}
 
@@ -49,7 +49,6 @@ def recolor(fr):
         mp[x, y] = (255, 255, 255, 255)
         if x + 1 < fr.width and px[x + 1, y][:3] in DARKS:
             px[x + 1, y] = EYE_PUPIL
-            mp[x + 1, y] = (200, 200, 200, 255)
     return fr, mask
 
 
@@ -151,14 +150,14 @@ def palm_orb(fr, hand, big):
     return fr
 
 
-def backify(fr, f=0):
+def backify(fr, f=0, n=6):
     """Seen from behind: the face is gone under her hair, which falls loose down her back."""
     fr = dewand(fr)
     px = fr.load()
     w, h = fr.size
     box = face_box(fr)
     if not box:
-        return fr
+        return fr, Image.new("RGBA", fr.size)
     top = box[1] + 1
     hair = {HAIR[:3], HAIR_D[:3]}
     opaque = lambda x, y: 0 <= x < w and 0 <= y < h and px[x, y][3] == 255
@@ -187,15 +186,32 @@ def backify(fr, f=0):
             if y > end:
                 continue
             painted[(x, y)] = end
+    # the cap over her head stays on the body; the rest is a separate layer that sways
+    cap = top + 3
+    for (x, y) in painted:
+        if y <= cap:
+            px[x, y] = HAIR
+    layer = Image.new("RGBA", fr.size)
+    lp = layer.load()
+    length = max(1, base_end - top)
+    swing = math.sin(f / n * math.tau)
+    moved = {}
     for (x, y), end in painted.items():
-        px[x, y] = HAIR
-    for (x, y), end in painted.items():
-        edge = (x - 1, y) not in painted or (x + 1, y) not in painted or y == end
-        sweep = blow * max(0, y - top - 4) * 0.2
+        t = max(0.0, (y - top) / length)
+        dx = round(2.2 * t ** 1.5 * swing + (0.8 * t * math.sin(f / n * math.tau * 2 + x * 0.7) if t > 0.7 else 0))
+        moved[(x + dx, y)] = end + dx * 0
+    for (x, y) in moved:
+        if 0 <= x < w:
+            lp[x, y] = HAIR
+    for (x, y), end in moved.items():
+        if not 0 <= x < w:
+            continue
+        edge = (x - 1, y) not in moved or (x + 1, y) not in moved or (x, y + 1) not in moved
+        sweep = blow * max(0, y - top - 4) * 0.2 + 2.2 * ((y - top) / length) ** 1.5 * swing
         strand = any(abs(x - (cx + k * (1.2 + (y - top) * 0.2) + sweep)) < 0.5 for k in (-2, -1, 1, 2))
         if edge or (strand and y > top + 3 and (y + int(x)) % 5 != 0):
-            px[x, y] = HAIR_D
-    return fr
+            lp[x, y] = HAIR_D
+    return fr, layer
 
 
 PALETTE = set()
@@ -220,7 +236,9 @@ def save(name, frs, back=False, palette_only=False):
     stack([r[0] for r in rc]).save(f"{D}/{name}.png")
     stack([r[1] for r in rc]).save(f"{D}/{name}_eyes.png")
     if back:
-        stack([backify(f, i) for i, f in enumerate(frs)]).save(f"{D}/{name}_back.png")
+        bk = [backify(f, i, len(frs)) for i, f in enumerate(frs)]
+        stack([b[0] for b in bk]).save(f"{D}/{name}_back.png")
+        stack([b[1] for b in bk]).save(f"{D}/{name}_hair.png")
     print(name, len(frs), frs[0].size)
 
 

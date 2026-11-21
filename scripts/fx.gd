@@ -452,11 +452,12 @@ static func ground_smoke(follow: Node2D, radius: float) -> CPUParticles2D:
 	sc.add_point(Vector2(1, 0.15))
 	p.scale_amount_curve = sc
 	var g := Gradient.new()
-	g.set_color(0, Color(1.0, 0.75, 0.3, 0.0))
-	g.add_point(0.08, Color(1.0, 0.62, 0.2, 0.75))
-	g.add_point(0.35, Color(0.85, 0.12, 0.04, 0.6))
-	g.add_point(0.7, Color(0.25, 0.02, 0.02, 0.35))
-	g.set_color(g.get_point_count() - 1, Color(0.05, 0.0, 0.0, 0.0))
+	# black flames with a faint red heart
+	g.set_color(0, Color(0.35, 0.03, 0.04, 0.0))
+	g.add_point(0.08, Color(0.3, 0.03, 0.04, 0.85))
+	g.add_point(0.3, Color(0.09, 0.01, 0.02, 0.85))
+	g.add_point(0.7, Color(0.03, 0.0, 0.01, 0.55))
+	g.set_color(g.get_point_count() - 1, Color(0.02, 0.0, 0.0, 0.0))
 	p.color_ramp = g
 	p.z_index = -1
 	follow.add_child(p)
@@ -480,10 +481,10 @@ static func ground_smoke(follow: Node2D, radius: float) -> CPUParticles2D:
 	c2.add_point(Vector2(1, 1.4))
 	smoke.scale_amount_curve = c2
 	var g2 := Gradient.new()
-	g2.set_color(0, Color(0.1, 0.01, 0.02, 0.0))
-	g2.add_point(0.2, Color(0.12, 0.02, 0.03, 0.6))
-	g2.add_point(0.6, Color(0.18, 0.12, 0.13, 0.35))
-	g2.set_color(g2.get_point_count() - 1, Color(0.3, 0.28, 0.3, 0.0))
+	g2.set_color(0, Color(0.06, 0.0, 0.01, 0.0))
+	g2.add_point(0.2, Color(0.07, 0.01, 0.02, 0.55))
+	g2.add_point(0.6, Color(0.12, 0.06, 0.07, 0.3))
+	g2.set_color(g2.get_point_count() - 1, Color(0.2, 0.15, 0.16, 0.0))
 	smoke.color_ramp = g2
 	smoke.z_index = -1
 	smoke.show_behind_parent = true
