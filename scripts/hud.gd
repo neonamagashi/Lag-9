@@ -1,10 +1,10 @@
 class_name Hud
 extends CanvasLayer
 
-const SLOTS := [["pierce", "LMB", "Pierce"], ["grab", "RMB", "Grab"], ["send", "F", "Send"], ["draw", "T", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["jump", "Shft", "Jump"], ["singularity", "G", "Sing."]]
+const SLOTS := [["pierce", "LMB", "Pierce"], ["grab", "RMB", "Grab"], ["send", "F", "Send"], ["draw", "T", "Draw"], ["rend", "R", "Rend"], ["snap", "Spc", "Snap"], ["jump", "Ctrl", "Jump"], ["singularity", "G", "Sing."]]
 const MAX_CD := {"pierce": Witch.PIERCE_CD, "grab": 0.4, "send": Witch.SEND_CD, "draw": Witch.DRAW_CD, "rend": Witch.REND_CD, "snap": Witch.SNAP_CD, "jump": 0.2, "singularity": Witch.SING_CD}
 const INK := Color(0.07, 0.05, 0.09)
-const HELP := "WASD move   LMB Pierce   RMB Grab, RMB again (hold) Release   F Send   T Draw   R Rend\nSpace Snap (hold to charge)   Shift Jump (hold to charge)   Q Crush/Lift   G Singularity   1 Whisky   E Interact   Esc Settings"
+const HELP := "WASD move   LMB Pierce   RMB Grab, RMB again (hold) Release   F Send   T Draw   R Rend\nSpace Snap (hold to charge)   Shift Sprint   Ctrl Jump (hold to charge)   Q Crush/Lift   G Singularity   1 Whisky   E Interact   Esc Settings"
 
 var witch: Witch
 var main: Node

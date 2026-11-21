@@ -21,12 +21,13 @@ const GROUP_LINES := ["did you see the price of turnips?", "...and then he said 
 	"spoons go on the left.", "it's all in the paperwork.", "was it the second drawer?", "I always said that.",
 	"...exactly.", "hm. quite.", "my cousin had a goat.", "four across was 'umbrella'.", "the good scissors, though."]
 
-enum Stage { INTRO, PEOPLE, BUSY, WALK, READY, TRIAL, DOOM }
+enum Stage { INTRO, PEOPLE, BUSY, WALK, READY, TRIAL, PASSED, DOOM }
 
 const ANCHOR := Vector2(0, 112)
 const CUT_ZOOM := 0.7
-const CUT_CAM := Vector2(0, -142)
+const CUT_CAM := Vector2(0, -160)
 const DOOM_SPEED := Vector2(150.0, 72.0)
+const PORTAL_AT := Vector2(120, -2335)
 
 var main: Node
 var witch: Witch
@@ -46,12 +47,16 @@ var _doom_r := 0.0
 var _doom_t := 0.0
 var _doom: Node2D
 var _doom_smoke: CPUParticles2D
+var _portal: Node2D
+var _portal_block: StaticBody2D
+var _portal_t := 0.0
 
 
 func setup(m: Node, w: Witch) -> void:
 	main = m
 	witch = w
 	w.abilities_enabled = false
+	w.sprint_enabled = false
 	w.field_active = false
 	w.visible = false
 	w.set_physics_process(false)
@@ -64,6 +69,7 @@ func _ready() -> void:
 	_bounds()
 	_populate()
 	_build_warden()
+	_build_portal()
 	var layer := CanvasLayer.new()
 	layer.layer = 50
 	add_child(layer)
@@ -260,19 +266,8 @@ func _people() -> void:
 
 func _meet() -> void:
 	stage = Stage.BUSY
-	witch.frozen = true
-	witch.velocity = Vector2.ZERO
-	# drawn in and anchored in front of him, then the camera pulls back to show the scale of him
-	_cutscene = true
-	var pull := witch.create_tween()
-	pull.tween_property(witch, "global_position", WARDEN_AT + ANCHOR, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	Sfx.play("pull_wave", 0.0, -10.0, 0.7)
-	var cam: Tween = main.camera.create_tween().set_parallel()
-	cam.tween_property(main.camera, "zoom", Vector2.ONE * CUT_ZOOM, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	cam.tween_property(main.camera, "position", CUT_CAM, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_cat(WARDEN_AT + Vector2(-110, 90), WARDEN_AT + Vector2(-50, -320), 58.0)
-	await pull.finished
-	witch.facing = 1
+	_cat(WARDEN_AT + Vector2(-110, 90), PORTAL_AT, 58.0)
+	await _cut_in()
 	await _wait(0.8)
 	await _line("cat_again")
 	await _wait(0.9)
@@ -290,23 +285,47 @@ func _meet() -> void:
 	Sfx.play("laugh", 0.05, -4.0)
 	await _line("witch_laugh")
 	await _vomit()
+	await _cut_out()
+	witch.abilities_enabled = true
+	main.hud.show_abilities = true
+	stage = Stage.READY
+
+
+## Drawn in and anchored in front of him while the camera pulls back to show the scale of him.
+func _cut_in() -> void:
+	witch.frozen = true
+	witch.velocity = Vector2.ZERO
+	_cutscene = true
+	var pull := witch.create_tween()
+	pull.tween_property(witch, "global_position", WARDEN_AT + ANCHOR, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	Sfx.play("pull_wave", 0.0, -10.0, 0.7)
+	var cam: Tween = main.camera.create_tween().set_parallel()
+	cam.tween_property(main.camera, "zoom", Vector2.ONE * CUT_ZOOM, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	cam.tween_property(main.camera, "position", CUT_CAM, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await pull.finished
+	witch.facing = 1
+	await cam.finished
+
+
+func _cut_out() -> void:
 	var back: Tween = main.camera.create_tween().set_parallel()
 	back.tween_property(main.camera, "zoom", Vector2.ONE, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	back.tween_property(main.camera, "position", Vector2(0, -111), 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await back.finished
 	_cutscene = false
 	witch.frozen = false
-	witch.abilities_enabled = true
-	main.hud.show_abilities = true
-	stage = Stage.READY
 
 
 func on_trial_complete() -> void:
 	await _wait(1.8)
+	await _cut_in()
 	Sfx.play("groan", 0.0, -3.0, 0.9)
 	await _wait(0.8)
 	await _line("warden_pass", "warden")
 	await _line("warden_sins", "warden")
+	await _cut_out()
+	stage = Stage.PASSED
+	_open_portal()
 
 
 ## She bends over, hands on knees, and heaves three times; the last one comes up as a rainbow.
@@ -344,16 +363,18 @@ func _spew() -> void:
 	var mouth := witch.global_position + Vector2(f * m.x, m.y - witch.hover)
 	var dir := Vector2(f * 0.35, 1.0).normalized()
 	var side := Vector2(-dir.y, dir.x)
+	# each drop lives exactly as long as it takes to reach the floor, so the stream ends in the puddle
+	var drop := -m.y + witch.hover + 3.0
+	var vy := 72.0 * dir.y
+	var fall := (-vy + sqrt(vy * vy + 400.0 * drop)) / 200.0
 	for i in RAINBOW.size():
 		var p := CPUParticles2D.new()
-		p.amount = 36
-		p.lifetime = 0.5
-		p.one_shot = true
-		p.explosiveness = 0.0
+		p.amount = 30
+		p.lifetime = fall
 		p.direction = dir
 		p.spread = 2.0
-		p.initial_velocity_min = 70.0
-		p.initial_velocity_max = 74.0
+		p.initial_velocity_min = 72.0
+		p.initial_velocity_max = 72.0
 		p.gravity = Vector2(0, 200)
 		p.scale_amount_min = 2.0
 		p.scale_amount_max = 2.0
@@ -362,6 +383,7 @@ func _spew() -> void:
 		p.z_index = 5
 		main.world.add_child(p)
 		p.emitting = true
+		get_tree().create_timer(0.6).timeout.connect(func(): p.emitting = false)
 		get_tree().create_timer(1.5).timeout.connect(p.queue_free)
 	var sp := CPUParticles2D.new()
 	sp.amount = 26
@@ -389,7 +411,7 @@ func _spew() -> void:
 	Sfx.play("pop", 0.3, -10.0, 1.6)
 	await _wait(0.3)
 	var puddle := Node2D.new()
-	puddle.global_position = witch.global_position + Vector2(f * 15.0, 3.0)
+	puddle.global_position = witch.global_position + Vector2(f * (m.x + 72.0 * dir.x * fall), 3.0)
 	puddle.z_index = -5
 	puddle.draw.connect(func():
 		for i in RAINBOW.size():
@@ -482,6 +504,11 @@ func _process(delta: float) -> void:
 	if stage == Stage.DOOM:
 		_spread_doom(delta)
 		return
+	if _portal:
+		_portal_t += delta
+		_portal.queue_redraw()
+		if stage == Stage.PASSED and p.distance_to(PORTAL_AT) < 16.0 and not witch.frozen:
+			_enter_portal()
 	match stage:
 		Stage.PEOPLE:
 			if p.y < -450.0 or _vagrants.any(func(v): return v.global_position.distance_to(p) < 130.0):
@@ -500,6 +527,7 @@ func _on_interact() -> void:
 	_prompt.visible = false
 	witch.drunk = false
 	witch.move_mult = 1.0
+	witch.sprint_enabled = true
 	Sfx.play("singularity", 0.0, -4.0, 0.7)
 	Fx.shake(4.0)
 	for v in _vagrants:
@@ -518,7 +546,8 @@ func _on_interact() -> void:
 
 # ---------- striking the Warden ----------
 func _warden_hit() -> void:
-	if _hit_cd > 0.0 or stage == Stage.DOOM:
+	# he can only be struck before the trial or after it; during it, he is out of reach
+	if _hit_cd > 0.0 or not stage in [Stage.READY, Stage.PASSED] or witch.frozen:
 		return
 	_hit_cd = 0.8
 	_hits += 1
@@ -543,7 +572,7 @@ func _peek() -> void:
 	var to_center := (WARDEN_AT.y - 30.0) - witch.global_position.y
 	var cam: Tween = main.camera.create_tween().set_parallel()
 	cam.tween_property(main.camera, "zoom", Vector2.ONE * CUT_ZOOM, 0.6).set_trans(Tween.TRANS_SINE)
-	cam.tween_property(main.camera, "position", Vector2(0, clampf(to_center, -320.0, -16.0)), 0.6).set_trans(Tween.TRANS_SINE)
+	cam.tween_property(main.camera, "position", Vector2(0, clampf(to_center, -900.0, -16.0)), 0.6).set_trans(Tween.TRANS_SINE)
 	while _peek_t > 0.0:
 		await get_tree().process_frame
 		_peek_t -= get_process_delta_time()
@@ -634,6 +663,107 @@ func _consumed() -> void:
 	t.tween_property(_flash, "color:a", 1.0, 1.0)
 	await t.finished
 	await _wait(1.0)
+	Game.change_level("limbo")
+
+
+# ---------- the portal ----------
+## A doorway behind the Warden: lined with black smoke, blinding light inside. Whiskey slips through it.
+func _build_portal() -> void:
+	_portal = Node2D.new()
+	_portal.position = PORTAL_AT
+	_portal.draw.connect(_draw_portal)
+	main.world.add_child(_portal)
+	var glow := PointLight2D.new()
+	glow.texture = Fx.soft()
+	glow.texture_scale = 7.0
+	glow.color = Color(1.0, 0.92, 0.6)
+	glow.energy = 1.4
+	glow.position = Vector2(0, -26)
+	_portal.add_child(glow)
+	var pts := PackedVector2Array()
+	var normals := PackedVector2Array()
+	for k in 40:
+		var t := k / 40.0
+		if t < 0.3:
+			pts.append(Vector2(-16, -t / 0.3 * 40.0))
+			normals.append(Vector2.LEFT)
+		elif t < 0.7:
+			var a := PI + (t - 0.3) / 0.4 * PI
+			pts.append(Vector2(cos(a) * 16.0, -40.0 + sin(a) * 14.0))
+			normals.append(Vector2(cos(a), sin(a)))
+		else:
+			pts.append(Vector2(16, -(1.0 - (t - 0.7) / 0.3) * 40.0))
+			normals.append(Vector2.RIGHT)
+	var smoke := CPUParticles2D.new()
+	smoke.amount = 90
+	smoke.lifetime = 1.4
+	smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_DIRECTED_POINTS
+	smoke.emission_points = pts
+	smoke.emission_normals = normals
+	smoke.spread = 25.0
+	smoke.initial_velocity_min = 6.0
+	smoke.initial_velocity_max = 16.0
+	smoke.gravity = Vector2(0, -8)
+	smoke.texture = Fx.soft()
+	smoke.scale_amount_min = 0.4
+	smoke.scale_amount_max = 0.9
+	var g := Gradient.new()
+	g.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
+	g.add_point(0.15, Color(0.02, 0.0, 0.03, 0.9))
+	g.add_point(0.7, Color(0.05, 0.03, 0.07, 0.5))
+	g.set_color(g.get_point_count() - 1, Color(0.2, 0.18, 0.22, 0.0))
+	smoke.color_ramp = g
+	_portal.add_child(smoke)
+	_portal_block = StaticBody2D.new()
+	_portal_block.collision_layer = 1
+	var col := CollisionShape2D.new()
+	var r := RectangleShape2D.new()
+	r.size = Vector2(34, 10)
+	col.shape = r
+	_portal_block.add_child(col)
+	_portal.add_child(_portal_block)
+
+
+func _draw_portal() -> void:
+	var pulse := 0.5 + 0.5 * sin(_portal_t * 3.0)
+	# light spilling onto the floor in front of it
+	for i in 3:
+		var w := 22.0 + i * 8.0
+		_portal.draw_colored_polygon(PackedVector2Array([Vector2(-16, 0), Vector2(16, 0), Vector2(w, 10.0 + i * 5.0), Vector2(-w, 10.0 + i * 5.0)]),
+			Color(1.0, 0.95, 0.7, (0.22 - i * 0.06) * (0.8 + 0.2 * pulse)))
+	# the frame, then the light filling it, brightest at the heart
+	_door(Vector2.ZERO, 18.0, 42.0, Color(0.0, 0.0, 0.01))
+	var cols := [Color(1.0, 0.78, 0.3), Color(1.0, 0.88, 0.5), Color(1.0, 0.95, 0.75), Color(1.0, 0.99, 0.94), Color(1, 1, 1)]
+	for i in cols.size():
+		_door(Vector2(0, -i * 1.5), 15.0 - i * 2.6, 38.0 - i * 4.0, cols[i].lerp(Color.WHITE, 0.15 * pulse))
+
+
+func _door(base: Vector2, half: float, h: float, c: Color) -> void:
+	var pts := PackedVector2Array([base + Vector2(-half, 0)])
+	for k in 13:
+		var a := PI + k / 12.0 * PI
+		pts.append(base + Vector2(cos(a) * half, -h + sin(a) * half * 0.9))
+	pts.append(base + Vector2(half, 0))
+	_portal.draw_colored_polygon(pts, c)
+
+
+func _open_portal() -> void:
+	if is_instance_valid(_portal_block):
+		_portal_block.queue_free()
+
+
+## Through the door: a blinding flash. (Layer 2 later; for now Limbo starts over.)
+func _enter_portal() -> void:
+	witch.frozen = true
+	Sfx.play("arrive_flash", 0.0, -2.0)
+	var pull := witch.create_tween()
+	pull.tween_property(witch, "global_position", PORTAL_AT + Vector2(0, -4), 0.5).set_trans(Tween.TRANS_SINE)
+	pull.parallel().tween_property(witch.visual, "scale", Vector2(0.3, 1.6), 0.5)
+	_flash.color = Color(1, 1, 1, 0)
+	var t := _flash.create_tween()
+	t.tween_property(_flash, "color:a", 1.0, 0.6)
+	await t.finished
+	await _wait(0.8)
 	Game.change_level("limbo")
 
 

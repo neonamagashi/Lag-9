@@ -7,6 +7,7 @@ var speed := 70.0
 var _sprite: AnimatedSprite2D
 var _meow_t := 0.3
 var _audio: AudioStreamPlayer2D
+var _gone := false
 
 
 func _ready() -> void:
@@ -36,9 +37,13 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	var to := target - position
 	if to.length() < 3.0:
-		modulate.a -= delta * 2.0
-		if modulate.a <= 0.0:
-			queue_free()
+		if not _gone:
+			_gone = true
+			# slips through: a squeeze and a fade into the light
+			var t := create_tween().set_parallel()
+			t.tween_property(self, "scale", Vector2(0.2, 1.3), 0.35)
+			t.tween_property(self, "modulate", Color(1, 1, 1, 0), 0.35)
+			t.chain().tween_callback(queue_free)
 		return
 	position += to.normalized() * speed * delta
 	var d := to.normalized()

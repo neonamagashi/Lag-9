@@ -152,13 +152,50 @@ def palm_orb(fr, hand, big):
 
 
 def backify(fr, f=0, n=6):
-    """From behind: exactly the front frame, with the face filled in as the back of her head."""
+    """From behind: her hair covers the back of her head and drapes over the shoulder and arm on its side."""
     fr = dewand(fr)
     px = fr.load()
     w, h = fr.size
     box = face_box(fr)
     if not box:
         return fr
+    top = box[1] + 2
+    hair = {HAIR[:3], HAIR_D[:3]}
+    cx = (box[0] + box[2]) / 2.0
+    left = sum(1 for y in range(top, top + 14) for x in range(0, int(cx)) if 0 <= y < h and px[x, y][:3] in hair)
+    right = sum(1 for y in range(top, top + 14) for x in range(int(cx), w) if 0 <= y < h and px[x, y][:3] in hair)
+    side = -1 if left >= right else 1
+    rows = [y for y in range(h) if any(px[x, y][3] == 255 for x in range(w))]
+    bottom = max(rows)
+    drape = top + int((bottom - top) * 0.62)
+    filled = set()
+    for y in range(top - 1, min(h, drape + 1)):
+        run = [x for x in range(w) if px[x, y][3] == 255 and abs(x - cx) <= 13]
+        if not run:
+            continue
+        xl, xr = min(run), max(run)
+        if y <= top + 4:
+            # the whole back of the head, brim to shoulders
+            a, b = max(xl, box[0]), min(xr, box[2])
+        else:
+            # down the hair side, over the shoulder and arm, rounding off at the bottom
+            k = (y - top - 4) / max(1, drape - top - 4)
+            reach = (cx + 1.5 - xl) * (1.0 - k * k * 0.8)
+            if side < 0:
+                a, b = xl, int(xl + reach)
+            else:
+                a, b = int(xr - reach), xr
+        for x in range(a, b + 1):
+            if px[x, y][3] == 255 or (y > top + 4 and a <= x <= b):
+                filled.add((x, y))
+    for (x, y) in filled:
+        px[x, y] = HAIR
+    for (x, y) in filled:
+        inner = (x - side, y) not in filled and px[x - side, y][:3] not in hair if False else False
+        edge = (x + 1, y) not in filled and px[min(w - 1, x + 1), y][:3] not in hair or (x - 1, y) not in filled and px[max(0, x - 1), y][:3] not in hair
+        if edge or ((x, y + 1) not in filled and px[x, min(h - 1, y + 1)][:3] not in hair):
+            px[x, y] = HAIR_D
+    return fr
     top = box[1] + 2
     face = {c[:3] for c in FACE} | DARKS | {EYE_LIT[:3], EYE_PUPIL[:3]}
     filled = set()

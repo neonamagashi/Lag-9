@@ -56,6 +56,16 @@ func _ready() -> void:
 	for a in ["pierce", "rend", "draw"]:
 		Input.action_release(a)
 	print("battle: cleared %s after %.1fs, waves %d, witch hp %.0f (low %.0f)" % [main.cleared, t2 / 60.0, main.wave + 1, w.hp, min_hp])
+	main.limbo._warden_hit()
+	var hits_during: int = main.limbo._hits
+	var anchored := false
+	var t3 := 0
+	while main.limbo.stage != Limbo.Stage.PASSED and t3 < 60 * 40:
+		t3 += 1
+		if main.limbo.warden.get_children().any(func(c): return c is Dialogue):
+			anchored = anchored or (w.frozen and w.global_position.distance_to(Limbo.WARDEN_AT + Limbo.ANCHOR) < 4.0 and main.camera.zoom.x < 0.8)
+		await get_tree().physics_frame
+	print("after the trial: warden hit during trial counted %d; anchored and zoomed out for his words %s; passed %s after %.1fs; portal open %s, sprint %s" % [hits_during, anchored, main.limbo.stage == Limbo.Stage.PASSED, t3 / 60.0, not is_instance_valid(main.limbo._portal_block), w.sprint_enabled])
 	get_tree().quit()
 
 

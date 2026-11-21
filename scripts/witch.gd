@@ -12,6 +12,7 @@ const SING_EYES := Color(1.0, 0.1, 0.08)
 
 # ---------- tuning ----------
 const SPEED := 118.0
+const SPRINT := 1.6
 const ACCEL := 1100.0
 const BODY_H := 40.0
 const R_INNER := BODY_H * 0.5
@@ -67,6 +68,7 @@ var held: Enemy
 var singularity_t := 0.0
 var dead := false
 var abilities_enabled := true
+var sprint_enabled := true
 ## Scene control: frozen stops her moving, move_mult slows her, drunk sways her, pose holds a frame (e.g. "hunch").
 var frozen := false
 var move_mult := 1.0
@@ -261,7 +263,8 @@ func _physics_process(delta: float) -> void:
 		aim = Vector2.RIGHT * facing
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down") if not frozen else Vector2.ZERO
 	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0 or snap_charge >= 0.0
-	var spd := SPEED * (0.45 if charging else 1.0) * move_mult
+	var sprinting := sprint_enabled and not charging and not frozen and Input.is_action_pressed("sprint")
+	var spd := SPEED * (0.45 if charging else (SPRINT if sprinting else 1.0)) * move_mult
 	velocity = velocity.move_toward(dir * spd, ACCEL * delta * (0.35 if z > 0.0 else 1.0))
 	collision_mask = 8 if z > 6.0 else 1 | 8
 	move_and_slide()
