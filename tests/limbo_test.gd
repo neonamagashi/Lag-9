@@ -11,13 +11,24 @@ func _ready() -> void:
 	w = main.witch
 	await _frames(240)
 	print("arrival: visible %s, abilities %s, field %s, flash alpha %.2f" % [w.visible, w.abilities_enabled, w.field_active, main.limbo._flash.color.a])
+	print("souls: %d (groups %d), sitting %d" % [main.limbo._vagrants.size(), main.limbo._groups.size(), main.limbo._vagrants.filter(func(v): return v.mode == Vagrant.Mode.SIT).size()])
 	Input.action_press("move_up")
 	var t := 0
-	while w.global_position.distance_to(Limbo.WARDEN_AT) > 100.0 and t < 60 * 30:
+	var marks := {}
+	var max_keel := 0.0
+	var slow_speed := 0.0
+	while main.limbo.stage != Limbo.Stage.READY and t < 60 * 120:
 		t += 1
+		var st: String = Limbo.Stage.keys()[main.limbo.stage]
+		if not marks.has(st):
+			marks[st] = snappedf(t / 60.0, 0.1)
+		max_keel = maxf(max_keel, w.keel)
+		if main.limbo.stage == Limbo.Stage.WALK:
+			slow_speed = maxf(slow_speed, w.velocity.length())
 		await get_tree().physics_frame
 	Input.action_release("move_up")
-	print("walked north %.1fs to the warden, prompt visible %s, souls said %s" % [t / 60.0, main.limbo._prompt.visible, main.limbo._said.keys()])
+	await _frames(10)
+	print("scene: stages reached at %s s, ready after %.1fs; walking speed %.0f (normal %d); she keeled over (max %.2f); cats seen %s; prompt visible %s, %.0f px from the warden" % [marks, t / 60.0, slow_speed, Witch.SPEED, max_keel, get_tree().root.find_children("*", "Whiskey", true, false).size(), main.limbo._prompt.visible, w.global_position.distance_to(Limbo.WARDEN_AT)])
 	Input.action_press("interact")
 	await _frames(3)
 	Input.action_release("interact")

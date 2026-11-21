@@ -133,6 +133,8 @@ func _process(delta: float) -> void:
 			if wave + 1 >= waves.size():
 				cleared = true
 				hud.banner("Trial complete" if limbo else "Room cleared", "F5 to play again")
+				if limbo:
+					limbo.on_trial_complete()
 				Sfx.play("singularity", 0.0, -8.0)
 			else:
 				_start_wave(wave + 1)

@@ -9,8 +9,12 @@ OUTLINE, SHADE, SKIN, MOUTH, BLUSH = (47, 37, 34), (185, 179, 161), (250, 243, 2
 TONES = [((241, 214, 190), (212, 178, 152)), ((224, 178, 138), (188, 142, 104)), ((196, 140, 98), (160, 106, 72)),
          ((152, 100, 68), (120, 76, 52)), ((112, 72, 50), (86, 54, 38)), ((84, 56, 42), (64, 42, 32))]
 CLOTH = [((156, 140, 112), (124, 110, 88)), ((122, 116, 108), (96, 90, 84)), ((170, 160, 142), (138, 128, 112)),
-         ((132, 112, 96), (104, 88, 74)), ((146, 146, 136), (116, 116, 108)), ((118, 104, 90), (92, 80, 70))]
-VARIANTS = [(0, 0, "loin"), (3, 1, "tunic"), (5, 2, "loin"), (2, 3, "tunic"), (4, 4, "loin"), (1, 5, "tunic")]
+         ((132, 112, 96), (104, 88, 74)), ((146, 146, 136), (116, 116, 108)), ((118, 104, 90), (92, 80, 70)),
+         ((84, 78, 76), (64, 58, 58)), ((150, 98, 80), (118, 74, 60)), ((204, 198, 184), (170, 164, 150)),
+         ((108, 116, 130), (84, 90, 104)), ((114, 126, 104), (88, 98, 80)), ((116, 92, 108), (90, 70, 84))]
+VARIANTS = [(0, 0, "loin"), (3, 1, "tunic"), (5, 2, "loin"), (2, 3, "tunic"), (4, 4, "loin"), (1, 5, "tunic"),
+            (2, 6, "robe"), (0, 7, "robe"), (4, 8, "robe"), (5, 9, "tunic"), (1, 10, "robe"), (3, 11, "robe"),
+            (4, 7, "tunic"), (0, 9, "loin")]
 
 
 def vagrant(src, tone, cloth, style):
@@ -28,7 +32,8 @@ def vagrant(src, tone, cloth, style):
                     rgb = p[:3]
                     side = fy // 32 in (1, 2, 3)
                     loin = (y in (27, 28) and 12 <= x <= 19) or (y == 26 and 12 <= x <= (16 if side else 19))
-                    covered = (style == "loin" and loin) or (style == "tunic" and 19 <= y <= 27 and 12 <= x <= 19)
+                    robe = 19 <= y <= 30 and 12 <= x <= 19
+                    covered = (style == "loin" and loin) or (style == "tunic" and 19 <= y <= 27 and 12 <= x <= 19) or (style == "robe" and robe)
                     flap = style == "loin" and y in (28, 29) and x in (15, 16)
                     if (covered and rgb in (SKIN, SHADE)) or (flap and rgb == OUTLINE):
                         px[fx + x, fy + y] = (c if rgb == SKIN else cs) + (255,)
@@ -40,7 +45,88 @@ def vagrant(src, tone, cloth, style):
                         px[fx + x, fy + y] = tuple(int(v * 0.92) for v in skin) + (255,)
                     elif rgb == BLUSH:
                         px[fx + x, fy + y] = tuple(int(a * 0.8 + b * 0.2) for a, b in zip(skin, BLUSH)) + (255,)
+    if style == "robe":
+        for fy in range(0, img.height, 32):
+            for fx in range(0, img.width, 32):
+                for y in range(27, 31):
+                    row = [x for x in range(11, 21) if px[fx + x, fy + y][3]]
+                    if not row:
+                        continue
+                    for x in range(min(row), max(row) + 1):
+                        edge = x in (min(row), max(row))
+                        px[fx + x, fy + y] = (OUTLINE if edge else (cs if y == 30 else c)) + (255,)
     return img
+
+
+def sit(src):
+    """Seated, legs crossed: the body drops 4px onto a lap drawn in the hip colour."""
+    out = Image.new("RGBA", (128, 32))
+    for f in range(4):
+        fr = src.crop((f * 32, 0, f * 32 + 32, 32))
+        hip = fr.getpixel((15, 26))
+        body = fr.crop((0, 0, 32, 27))
+        frame = Image.new("RGBA", (32, 32))
+        frame.paste(body, (0, 4), body)
+        px = frame.load()
+        for y, (a, b) in {29: (9, 22), 30: (9, 22), 31: (10, 21)}.items():
+            for x in range(a, b + 1):
+                edge = x in (a, b) or y == 31
+                px[x, y] = OUTLINE + (255,) if edge else hip[:3] + (255,)
+        out.paste(frame, (f * 32, 0))
+    return out
+
+
+def cat_walk(frames=4):
+    """Placeholder Whiskey: a ginger cat walking away, tail up."""
+    O, F, D2, L = (58, 30, 22, 255), (222, 140, 62, 255), (176, 98, 42, 255), (246, 196, 128, 255)
+    out = Image.new("RGBA", (16 * frames, 16))
+    for f in range(frames):
+        im = Image.new("RGBA", (16, 16))
+        d = ImageDraw.Draw(im)
+        step = f % 2
+        d.ellipse((4, 6, 11, 13), fill=F, outline=O)
+        d.line((5, 9, 10, 9), fill=D2)
+        d.line((5, 11, 10, 11), fill=D2)
+        d.ellipse((5, 2, 10, 7), fill=F, outline=O)
+        d.polygon([(5, 3), (5, 0), (7, 2)], fill=F, outline=O)
+        d.polygon([(10, 3), (10, 0), (8, 2)], fill=F, outline=O)
+        d.line((6, 4, 9, 4), fill=D2)
+        for lx, up in ((5, step), (9, 1 - step)):
+            d.rectangle((lx, 12, lx + 1, 14 - up), fill=F, outline=O)
+        sway = [0, 1, 0, -1][f]
+        d.line([(8, 12), (8 + sway, 9), (9 + sway, 6), (10 + sway * 2, 4)], fill=O, width=1)
+        d.line([(7, 12), (7 + sway, 9), (8 + sway, 6)], fill=F)
+        d.point((10 + sway * 2, 4), fill=L)
+        out.paste(im, (f * 16, 0))
+    return out
+
+
+def bubble(kind):
+    """Thought bubble with a '?' or a plate of pancakes."""
+    O, W = (60, 50, 80, 255), (255, 255, 255, 255)
+    im = Image.new("RGBA", (40, 32))
+    d = ImageDraw.Draw(im)
+    d.ellipse((4, 0, 39, 23), fill=W, outline=O)
+    d.ellipse((5, 23, 9, 27), fill=W, outline=O)
+    d.ellipse((1, 28, 3, 30), fill=W, outline=O)
+    if kind == "q":
+        P = (110, 60, 190, 255)
+        for x, y in [(19, 5), (20, 4), (21, 4), (22, 4), (23, 5), (24, 6), (24, 7), (23, 8), (22, 9), (21, 10), (21, 11), (21, 12), (21, 15), (21, 16)]:
+            d.rectangle((x, y, x, y), fill=P)
+            d.rectangle((x + 1, y, x + 1, y), fill=P)
+    else:
+        PL, PLD = (232, 232, 240, 255), (180, 180, 196, 255)
+        CAKE, CAKED = (224, 168, 88, 255), (166, 108, 48, 255)
+        SYR, BUT = (128, 58, 20, 255), (252, 232, 120, 255)
+        d.ellipse((10, 14, 33, 20), fill=PL, outline=PLD)
+        for i in range(3):
+            y = 13 - i * 3
+            d.ellipse((13, y - 2, 30, y + 3), fill=CAKE, outline=CAKED)
+        d.ellipse((15, 5, 28, 9), fill=SYR)
+        for x, ln in ((15, 5), (19, 3), (26, 6), (28, 3)):
+            d.line((x, 8, x, 8 + ln), fill=SYR)
+        d.rectangle((20, 5, 23, 7), fill=BUT)
+    return im
 
 
 def warden(frames=4):
@@ -204,7 +290,13 @@ def warden2():
 src = {n: Image.open(f"{D}/template/{n}.png").convert("RGBA") for n in ("idle", "walk")}
 for i, (t, c, style) in enumerate(VARIANTS):
     for n in src:
-        vagrant(src[n], TONES[t], CLOTH[c], style).save(f"{D}/vagrant_{i}_{n}.png")
+        im = vagrant(src[n], TONES[t], CLOTH[c], style)
+        im.save(f"{D}/vagrant_{i}_{n}.png")
+        if n == "idle":
+            sit(im).save(f"{D}/vagrant_{i}_sit.png")
+cat_walk().save(f"{D}/whiskey_walk.png")
+bubble("q").save(f"{D}/think_q.png")
+bubble("pancakes").save(f"{D}/think_pancakes.png")
 b, p = warden2()
 b.save(f"{D}/warden.png")
 p.save(f"{D}/warden_train.png")

@@ -62,6 +62,12 @@ var held: Enemy
 var singularity_t := 0.0
 var dead := false
 var abilities_enabled := true
+## Scene control: frozen stops her moving, move_mult slows her, drunk sways her, keel bends her over (0-1).
+var frozen := false
+var move_mult := 1.0
+var drunk := false
+var keel := 0.0
+var _lean := 0.0
 var field_active := true
 var aim := Vector2.RIGHT
 var aim_point: Variant = null
@@ -175,7 +181,14 @@ func _update_visual(delta: float) -> void:
 	visual.position.y -= hover
 	# floating: head leans into the drift (shear pivots at her feet)
 	var lean := clampf(velocity.x / SPEED, -1.0, 1.0) * 0.12 * (1.0 if z <= 0.0 else 0.4)
-	visual.skew = lerpf(visual.skew, lean, 1.0 - exp(-delta * 8.0))
+	_lean = lerpf(_lean, lean, 1.0 - exp(-delta * 8.0))
+	visual.skew = _lean
+	if drunk:
+		visual.skew += sin(_t * 1.3) * 0.06 + sin(_t * 2.9) * 0.02
+		visual.position.x += sin(_t * 0.8) * 1.2
+	if keel > 0.0:
+		visual.skew += keel * 0.55 * facing
+		visual.scale.y *= 1.0 - 0.14 * keel
 	eyes.animation = sprite.animation
 	eyes.frame = sprite.frame
 	eyes.flip_h = sprite.flip_h
@@ -233,16 +246,16 @@ func _physics_process(delta: float) -> void:
 	aim = (target - global_position + Vector2(0, 20)).normalized()
 	if aim == Vector2.ZERO:
 		aim = Vector2.RIGHT * facing
-	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down") if not frozen else Vector2.ZERO
 	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0
-	var spd := SPEED * (0.45 if charging else 1.0)
+	var spd := SPEED * (0.45 if charging else 1.0) * move_mult
 	velocity = velocity.move_toward(dir * spd, ACCEL * delta * (0.35 if z > 0.0 else 1.0))
 	collision_mask = 8 if z > 6.0 else 1 | 8
 	move_and_slide()
 	var impact := _update_z(delta)
 	if impact > 0.0:
 		_land()
-	if Input.is_action_just_pressed("interact"):
+	if Input.is_action_just_pressed("interact") and not frozen:
 		interact.emit()
 	_abilities(delta, dir)
 	_animate(dir)

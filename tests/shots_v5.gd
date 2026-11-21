@@ -25,6 +25,8 @@ func _ready() -> void:
 	w.reset_physics_interpolation()
 	await _frames(70)
 	await _shot("03_warden")
+	main.limbo.stage = Limbo.Stage.READY
+	w.frozen = false
 	Input.action_press("interact")
 	await _frames(2)
 	Input.action_release("interact")

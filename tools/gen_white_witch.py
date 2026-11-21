@@ -182,7 +182,7 @@ def backify(fr, f=0, n=6):
             xl, xr = xl - (1 if y > top + 4 else 0), xr + (1 if y > top + 4 else 0)
         for x in range(xl, xr + 1):
             drift = blow * max(0, y - top - 6) // 4
-            end = base_end + round(1.6 * math.sin((x - drift) * 1.1 + f * 0.9)) + (2 if (x - cx) * (blow or -1) > 2 else 0)
+            end = base_end + round(0.7 * math.sin((x - drift) * 0.6 + f * 0.9)) + (1 if (x - cx) * (blow or -1) > 2 else 0)
             if y > end:
                 continue
             painted[(x, y)] = end
@@ -198,7 +198,7 @@ def backify(fr, f=0, n=6):
     moved = {}
     for (x, y), end in painted.items():
         t = max(0.0, (y - top) / length)
-        dx = round(2.2 * t ** 1.5 * swing + (0.8 * t * math.sin(f / n * math.tau * 2 + x * 0.7) if t > 0.7 else 0))
+        dx = round(2.2 * t ** 1.5 * swing)
         moved[(x + dx, y)] = end + dx * 0
     for (x, y) in moved:
         if 0 <= x < w:
@@ -206,10 +206,10 @@ def backify(fr, f=0, n=6):
     for (x, y), end in moved.items():
         if not 0 <= x < w:
             continue
+        # one solid mass like the front: shaded only along its outline and the shadow side
         edge = (x - 1, y) not in moved or (x + 1, y) not in moved or (x, y + 1) not in moved
-        sweep = blow * max(0, y - top - 4) * 0.2 + 2.2 * ((y - top) / length) ** 1.5 * swing
-        strand = any(abs(x - (cx + k * (1.2 + (y - top) * 0.2) + sweep)) < 0.5 for k in (-2, -1, 1, 2))
-        if edge or (strand and y > top + 3 and (y + int(x)) % 5 != 0):
+        shadow = (x + 1, y) in moved and (x + 2, y) not in moved and y > top + 2
+        if edge or shadow:
             lp[x, y] = HAIR_D
     return fr, layer
 

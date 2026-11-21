@@ -3,6 +3,9 @@ extends Node2D
 
 const CPS := 28.0
 
+## Fires when typing reaches an *action* in the line, e.g. "*buuurp*".
+signal cue(action: String)
+
 var text := ""
 var voice := "babble"
 var pitch := 1.0
@@ -14,6 +17,8 @@ var _label: Label
 var _shown := 0.0
 var _blip := 0
 var _done_t := 0.0
+var cps := CPS
+var _cue_at := {}
 
 
 static func say(speaker: Node2D, line: String, v := "babble", p := 1.0, c := Color(0.12, 0.1, 0.16), h := 46.0, font := 8) -> Dialogue:
@@ -45,15 +50,26 @@ func _ready() -> void:
 	_label.position = Vector2(-80, -height)
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.visible_characters = 0
+	var i := text.find("*")
+	while i >= 0:
+		var j := text.find("*", i + 1)
+		if j < 0:
+			break
+		_cue_at[i] = text.substr(i + 1, j - i - 1)
+		i = text.find("*", j + 1)
 	_label.text = text
 	add_child(_label)
 
 
 func _process(delta: float) -> void:
 	if _shown < text.length():
-		_shown += delta * CPS
+		var before := int(_shown)
+		_shown += delta * cps
 		var n := int(_shown)
 		_label.visible_characters = n
+		for k in _cue_at:
+			if k >= before and k < n:
+				cue.emit(_cue_at[k])
 		if n / 2 > _blip and n <= text.length() and text[mini(n, text.length()) - 1] != " ":
 			_blip = n / 2
 			if voice != "":
@@ -68,3 +84,8 @@ func _process(delta: float) -> void:
 
 func finished() -> bool:
 	return _shown >= text.length() and _done_t > hold
+
+
+## Typed out and given a moment to be read.
+func read() -> bool:
+	return _shown >= text.length() and _done_t > minf(hold, 0.9 + text.length() * 0.03)

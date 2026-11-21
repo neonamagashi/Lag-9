@@ -1,7 +1,19 @@
 {
-	"_note": "Placeholder lines for the Limbo beats. Edit freely; an empty string skips the line.",
-	"arrive": "...Whisky?",
-	"wander": "Where... is this?",
-	"see_souls": "Hello? ...They can't even see me.",
-	"see_warden": "..."
+	"_note": "Limbo script lines. Edit freely; an empty string skips the line. *word* inside a line is an action cue (*buuurp* plays the burp).",
+	"cat_seen": "Whiskey? Where are you going?",
+	"cat_gone": "What are you doing here? ...Where's here anyway?",
+	"people_1": "Hey! What is this place?",
+	"people_2": "It's disturbingly clean... and kinda smells like... bleach?",
+	"people_3": "Yea, it's making me nauseous...",
+	"hangover": "...this hangover is killing me.",
+	"cat_again": "Whiskey! ...this damned cat...",
+	"warden_1": "What are YOU doing here.",
+	"warden_2": "This place isn't meant for you. Begone.",
+	"witch_cat": "I'm looking for my cat, so pretty sure I'm meant to *buuurp* be here.",
+	"warden_3": "He's YOUR cat? Interesting. He's here all the time.",
+	"witch_shock": "ALL the time? Well... how often do I create drunk portals...",
+	"warden_4": "If you seek your cat, pass my trial. For if you can't, the layers below will eat you alive.",
+	"witch_laugh": "Pfft... hahaha!",
+	"warden_pass": "...Hm. You may pass, witch.",
+	"warden_sins": "But be wary of your sins. Below, they grow heavier."
 }

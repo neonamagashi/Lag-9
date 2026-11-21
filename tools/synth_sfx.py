@@ -126,6 +126,74 @@ def land():
     return lowpass(rng.standard_normal(n), 0.1) * env(n, 0.002, 0.04)
 
 
+def meow():
+    tt = t(0.6)
+    n = len(tt)
+    f = 520 + 380 * np.sin(np.pi * np.clip(tt / 0.6, 0, 1)) ** 0.8 - 120 * tt
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    src = sum(np.sin(ph * h) / h ** 1.2 for h in range(1, 10))
+    vowel = 0.5 + 0.5 * np.sin(np.pi * np.clip(tt / 0.6, 0, 1))
+    shaped = src * (0.55 + 0.45 * np.sin(2 * np.pi * (700 + 900 * vowel) * tt))
+    return lowpass(shaped, 0.35) * env(n, 0.04, 0.25)
+
+
+def warden_voice():
+    """Deep, reversed and layered: a low syllable played backwards with an octave-down double."""
+    a = syllable(rng.uniform(62, 70), 0.22, str(rng.choice(["o", "u", "a"])))
+    b = syllable(33, 0.22, "u") * 0.8
+    c = syllable(98, 0.22, "o") * 0.25
+    x = (a + b + c)[::-1]
+    return lowpass(x, 0.12)
+
+
+def groan():
+    tt = t(1.4)
+    n = len(tt)
+    f = 58 + 10 * np.sin(2 * np.pi * 0.7 * tt) - 8 * tt
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    src = sum(np.sin(ph * h) / h for h in range(1, 16))
+    rasp = lowpass(rng.standard_normal(n), 0.05) * 0.3
+    return lowpass(src + rasp, 0.08) * env(n, 0.25, 0.7)
+
+
+def burp():
+    tt = t(0.45)
+    n = len(tt)
+    f = 110 + 25 * np.sin(2 * np.pi * 9 * tt) + 40 * rng.standard_normal(n) * 0.05
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    src = np.sign(np.sin(ph)) * 0.6 + np.sin(ph * 2) * 0.4
+    return lowpass(src, 0.1) * env(n, 0.02, 0.2)
+
+
+def retch():
+    parts = []
+    for i in range(3):
+        d = 0.35 if i < 2 else 0.6
+        tt = t(d)
+        n = len(tt)
+        noise = lowpass(rng.standard_normal(n), 0.12 if i < 2 else 0.2)
+        f = 130 - 50 * tt / d
+        gurgle = np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.5 + 0.5 * np.sin(2 * np.pi * 23 * tt))
+        splash = (rng.standard_normal(n) - lowpass(rng.standard_normal(n), 0.4)) * (0.6 if i == 2 else 0.0) * np.clip((tt - d * 0.3) * 4, 0, 1)
+        parts.append((noise * 0.6 + gurgle * 0.5 + splash) * env(n, 0.03, d * 0.4))
+        parts.append(np.zeros(int(SR * 0.18)))
+    return np.concatenate(parts)
+
+
+def laugh():
+    parts = []
+    for i in range(5):
+        parts.append(syllable(260 - i * 12, 0.1, "a") * (1.0 - i * 0.12))
+        parts.append(np.zeros(int(SR * 0.06)))
+    return np.concatenate(parts)
+
+
+def pop():
+    tt = t(0.12)
+    n = len(tt)
+    return np.sin(2 * np.pi * np.cumsum(400 + 900 * tt / 0.12) / SR) * env(n, 0.002, 0.04)
+
+
 save("snap_click", snap(), 0.5)
 save("babble", babble(), 0.6)
 save("mumble", mumble(), 0.5)
@@ -137,3 +205,10 @@ save("beam", beam(), 0.6)
 save("jump", jump(), 0.6)
 save("land", land(), 0.6)
 print("ok")
+save("meow", meow(), 0.6)
+save("warden", warden_voice(), 0.8)
+save("groan", groan(), 0.8)
+save("burp", burp(), 0.7)
+save("retch", retch(), 0.7)
+save("laugh", laugh(), 0.6)
+save("pop", pop(), 0.5)

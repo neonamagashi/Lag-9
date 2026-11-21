@@ -24,7 +24,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F1 / F5 | Help / restart |
 
 ## Limbo (Circle 1)
-The game starts here. Black, then a blinding flash: she arrives in a pure white void with only her shadow and a few gravity twinkles. She never walks; she floats, leaning into her drift, and turns away (white hair down her back) when heading north. Drifting north she meets the souls of Limbo, wandering and mumbling, then a towering hooded figure whose cloak billows out and spreads across the floor, rippling in a wind. Press E at its feet to Begin: the souls drift away, her field and abilities awaken, and three waves attack. The whole level has reverb.
+The game starts here, as a scripted scene (lines in `assets/dialogue/limbo.json`; `*word*` in a line is an action cue, e.g. `*buuurp*`). Black, then a blinding flash: she arrives hungover in a pure white void and sees Whiskey wandering off north, meowing. She drifts north at a slowed, swaying pace through a crowd of about 56 souls that gets denser toward the Warden: groups muttering to each other about nothing, loners mumbling to themselves, some sitting, some wandering. The smell gets to her and she throws up (a rainbow). At the Warden, Whiskey slips past him, they talk (her thought bubbles show she isn't listening), she throws up again, and only then can she press E to Begin. The souls drift away, her field and abilities awaken, and three waves attack. Afterwards the Warden lets her pass. The whole level has reverb. Whiskey is a placeholder sprite until the real cat art arrives.
 
 Placeholder dialogue lives in `assets/dialogue/limbo.json` (edit the lines freely). Voices are babble sounds while text types out.
 
@@ -63,7 +63,8 @@ The converter repacks animated tiles and marks walls and water solid (platform t
 
 ## Tests
 - `tests/play_test.tscn` (headless, ruins): every field rule, Rend, teleport, grab and throw, push, pull, jump, bosses and projectiles, then a bot plays all four waves.
-- `tests/limbo_test.tscn` (headless): arrival, the walk north, Begin, and the trial battle.
+- `tests/limbo_test.tscn` (headless): the whole opening scene (souls, slowed walk, vomiting, the Warden conversation), Begin, and the trial battle.
+- `tests/shots_scene.tscn`: screenshots of each beat of the opening scene.
 - `tests/physics_test.tscn` (headless): grab squeeze and swing, thrown and pushed enemies colliding, friendly fire, line-of-fire sidestepping, dodging bombs, Lift and the slam.
 - `tests/shots_v5.tscn`: screenshots (and close crops) of the back view, lean, Warden, palm cast, charge effects, grab squirm, Lift and Singularity.
 - `tests/shots_vfx.tscn`: renders screenshots of each effect.
