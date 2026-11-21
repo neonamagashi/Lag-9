@@ -7,7 +7,8 @@ const DIR := "res://assets/witch_white/%s.png"
 const CRUSH_COLOR := Color(0.55, 0.42, 1.0)
 const LIFT_COLOR := Color(1.0, 0.82, 0.4)
 const ELLIPSE := 0.6
-const HAND_TIP := Vector2(11, -18)
+const PALM_PX := Vector2(39.0, 28.0)
+const SING_EYES := Color(1.0, 0.1, 0.08)
 
 # ---------- tuning ----------
 const SPEED := 118.0
@@ -74,6 +75,10 @@ var _sing_smoke: CPUParticles2D
 var field: GravityField
 var glow: PointLight2D
 var eyes: AnimatedSprite2D
+var charge_hand: AnimatedSprite2D
+var charge_dust: AnimatedSprite2D
+var _tint: ColorRect
+var _sing_k := 0.0
 
 
 func _ready() -> void:
@@ -113,11 +118,36 @@ func _ready() -> void:
 	eyes = AnimatedSprite2D.new()
 	eyes.sprite_frames = ef
 	eyes.centered = false
-	var add := CanvasItemMaterial.new()
-	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	add.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	eyes.material = add
+	var unshaded := CanvasItemMaterial.new()
+	unshaded.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	eyes.material = unshaded
 	visual.add_child(eyes)
+	var cf := SpriteFrames.new()
+	cf.remove_animation("default")
+	Sheets.add(cf, "hand", DIR % "charge_hand", 40, 32, 10, 1.0, false, true)
+	Sheets.add(cf, "dust", DIR % "charge_dust", 90, 28, 10, 1.0, false, true)
+	charge_hand = AnimatedSprite2D.new()
+	charge_hand.sprite_frames = cf
+	charge_hand.animation = "hand"
+	charge_hand.centered = false
+	charge_hand.z_index = 2
+	charge_hand.visible = false
+	add_child(charge_hand)
+	charge_dust = AnimatedSprite2D.new()
+	charge_dust.sprite_frames = cf
+	charge_dust.animation = "dust"
+	charge_dust.centered = false
+	charge_dust.z_index = -1
+	charge_dust.visible = false
+	add_child(charge_dust)
+	var tl := CanvasLayer.new()
+	tl.layer = 4
+	add_child(tl)
+	_tint = ColorRect.new()
+	_tint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tint.color = Color(0.3, 0.0, 0.02, 0.0)
+	tl.add_child(_tint)
 	play("idle")
 	field = GravityField.new()
 	field.witch = self
@@ -129,15 +159,21 @@ func _ready() -> void:
 func _update_visual(delta: float) -> void:
 	super(delta)
 	visual.position.y -= hover
-	# floating: lean into the drift instead of walking
-	var lean := clampf(velocity.x / SPEED, -1.0, 1.0) * 0.09 * (1.0 if z <= 0.0 else 0.4)
-	visual.skew = lerpf(visual.skew, -lean, 1.0 - exp(-delta * 8.0))
+	# floating: head leans into the drift (shear pivots at her feet)
+	var lean := clampf(velocity.x / SPEED, -1.0, 1.0) * 0.12 * (1.0 if z <= 0.0 else 0.4)
+	visual.skew = lerpf(visual.skew, lean, 1.0 - exp(-delta * 8.0))
 	eyes.animation = sprite.animation
 	eyes.frame = sprite.frame
 	eyes.flip_h = sprite.flip_h
 	eyes.offset = sprite.offset
-	eyes.visible = not _back
-	eyes.modulate.a = 0.75 + 0.25 * sin(_t * 3.0)
+	# eyes are purple pixels in the sprite; this mask paints them red in Singularity
+	_sing_k = move_toward(_sing_k, 1.0 if singularity_t > 0.0 else 0.0, delta * 2.5)
+	eyes.visible = not _back and _sing_k > 0.01
+	eyes.modulate = Color(SING_EYES, _sing_k * (0.85 + 0.15 * sin(_t * 9.0)))
+	glow.color = Color(0.7, 0.55, 1.0).lerp(Color(1.0, 0.1, 0.05), _sing_k)
+	glow.energy = 0.35 + 0.6 * _sing_k * (0.8 + 0.2 * sin(_t * 9.0)) if not dead else 0.1
+	_tint.color.a = 0.2 * _sing_k
+	_update_charge_fx()
 
 
 # ---------- input & movement ----------
@@ -155,11 +191,15 @@ func _physics_process(delta: float) -> void:
 		if singularity_t <= 0.0:
 			Sfx.play("flip_crush", 0.0, -6.0)
 			if _sing_smoke:
-				_sing_smoke.emitting = false
+				var old := _sing_smoke
+				old.emitting = false
+				for c in old.get_children():
+					c.emitting = false
+				get_tree().create_timer(2.0).timeout.connect(old.queue_free)
 				_sing_smoke = null
 	_field_k = lerpf(_field_k, SING_RADIUS if singularity_t > 0.0 else 1.0, 1.0 - exp(-delta * 6.0))
 	if _sing_smoke:
-		_sing_smoke.emission_sphere_radius = r_inner()
+		_sing_smoke.emission_sphere_radius = R_INNER * 0.7
 	if dead:
 		velocity = velocity.move_toward(Vector2.ZERO, ACCEL * delta)
 		move_and_slide()
@@ -266,8 +306,40 @@ func _animate(dir: Vector2) -> void:
 
 
 # ---------- abilities ----------
+## Where her palm is in the casting pose, through the sprite's real transform (hover, lean, squash).
 func hand_tip() -> Vector2:
-	return global_position + Vector2(HAND_TIP.x * facing, HAND_TIP.y - z - hover)
+	return global_position + visual.transform * _palm_local()
+
+
+func _palm_local() -> Vector2:
+	var a: Vector3 = anchors["cast"]
+	var off := Vector2(-(a.z - a.x) if facing < 0 else -a.x, -a.y)
+	var px := Vector2(a.z - PALM_PX.x if facing < 0 else PALM_PX.x, PALM_PX.y)
+	return off + px
+
+
+## The red witch's charge, in violet: a rune circle gathering into a spark at her palm, dust at her feet.
+func _update_charge_fx() -> void:
+	var k := -1.0
+	for c in [send_charge / SEND_MAX_CHARGE if send_charge >= 0.0 else -1.0,
+			draw_charge / DRAW_MAX_CHARGE if draw_charge >= 0.0 else -1.0,
+			throw_charge / THROW_MAX_CHARGE if throw_charge >= 0.0 else -1.0]:
+		k = maxf(k, c)
+	var jumping := jump_charge >= 0.0
+	charge_hand.visible = k >= 0.0 and not dead
+	charge_dust.visible = (k >= 0.0 or jumping) and not dead
+	if jumping and k < 0.0:
+		k = jump_charge / JUMP_MAX_CHARGE
+	if k < 0.0:
+		return
+	var f := 2 + int(k * 7.0) if k < 1.0 else 6 + int(_t * 10.0) % 4
+	charge_hand.frame = mini(f, 9)
+	charge_dust.frame = mini(f, 9)
+	charge_hand.flip_h = facing < 0
+	charge_hand.offset = Vector2(-32 if facing < 0 else -8, -16)
+	charge_hand.position = visual.transform * _palm_local()
+	charge_dust.flip_h = facing < 0
+	charge_dust.offset = Vector2(-46 if facing < 0 else -44, -18)
 
 
 func _pierce() -> void:
@@ -407,7 +479,7 @@ func _singularity() -> void:
 	_cast_t = 0.5
 	Sfx.play("singularity", 0.0, 0.0)
 	Fx.shake(4.0)
-	_sing_smoke = Fx.ground_smoke(self, r_inner())
+	_sing_smoke = Fx.ground_smoke(self, R_INNER * 0.7)
 
 
 func _jump(k: float) -> void:
@@ -516,7 +588,6 @@ func take_damage(amount: float, from: Vector2) -> void:
 			held.drop()
 			held = null
 		play("death", true)
-		glow.energy = 0.1
 
 
 func gain_mana(amount: float) -> void:

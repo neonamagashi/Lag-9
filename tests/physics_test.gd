@@ -21,6 +21,8 @@ func _ready() -> void:
 	await _chain()
 	await _friendly_fire()
 	await _bombs()
+	await _clear()
+	await _lift()
 	get_tree().quit()
 
 
@@ -152,3 +154,23 @@ func _bombs() -> void:
 		main.world.add_child(b)
 	await _frames(120)
 	print("bomb splash: stunned rat hp %.0f -> %.0f; free skeleton dodged %.0f px, hp %.0f -> %.0f" % [hp_s, stuck.hp, free.global_position.distance_to(fp), hp_f, free.hp])
+
+
+func _lift() -> void:
+	w.field_active = true
+	w.mode = Witch.Mode.LIFT
+	var rats: Array[Enemy] = []
+	for a in [0.0, 2.0, 4.0]:
+		var r := await _enemy("rat", Vector2(cos(a) * 85.0, sin(a) * 85.0 * Witch.ELLIPSE))
+		rats.append(r)
+	var far := await _enemy("rat", Vector2(0, 150))
+	await _frames(90)
+	print("lift (rats at the mid ring's edge): lifted %s, heights %s; far rat lifted %s" % [rats.map(func(r): return r.lifted), rats.map(func(r): return snappedf(r.z, 1)), far.lifted])
+	var hp := rats.map(func(r): return r.hp)
+	Input.action_press("flip")
+	await _frames(2)
+	Input.action_release("flip")
+	await _frames(60)
+	print("flip to crush: slammed, hp %s -> %s" % [hp, rats.map(func(r): return snappedf(r.hp, 1))])
+	w.mode = Witch.Mode.CRUSH
+	w.field_active = false

@@ -293,7 +293,7 @@ static func beam(tip: Vector2, dir: Vector2, length: float) -> void:
 	var s := AnimatedSprite2D.new()
 	s.sprite_frames = _beam
 	s.centered = false
-	s.offset = Vector2(0, -23)
+	s.offset = Vector2(-3, -27.5)
 	s.position = tip
 	s.rotation = dir.angle()
 	s.scale = Vector2(length / 88.0, 1.0)
@@ -429,29 +429,65 @@ static func displace(pos: Vector2, follow: Node2D) -> void:
 
 
 static func ground_smoke(follow: Node2D, radius: float) -> CPUParticles2D:
+	## Singularity: smoky flames billowing out from under her. Returns the flame emitter; the smoke is its child.
 	var p := CPUParticles2D.new()
-	p.amount = 90
-	p.lifetime = 1.3
+	p.amount = 160
+	p.lifetime = 0.7
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = radius
 	p.scale = Vector2(1.0, Witch.ELLIPSE)
 	p.direction = Vector2(0, -1)
-	p.spread = 25.0
-	p.initial_velocity_min = 8.0
-	p.initial_velocity_max = 20.0
-	p.damping_min = 6.0
-	p.damping_max = 10.0
-	p.gravity = Vector2.ZERO
+	p.spread = 35.0
+	p.initial_velocity_min = 25.0
+	p.initial_velocity_max = 60.0
+	p.gravity = Vector2(0, -60)
+	p.damping_min = 10.0
+	p.damping_max = 25.0
 	p.texture = soft()
-	p.scale_amount_min = 0.4
-	p.scale_amount_max = 0.85
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 1.3
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 1.0))
+	sc.add_point(Vector2(0.5, 0.75))
+	sc.add_point(Vector2(1, 0.15))
+	p.scale_amount_curve = sc
 	var g := Gradient.new()
-	g.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
-	g.add_point(0.2, Color(0.02, 0.02, 0.03, 0.75))
-	g.add_point(0.65, Color(0.55, 0.53, 0.58, 0.4))
-	g.set_color(g.get_point_count() - 1, Color(0.95, 0.95, 0.97, 0.0))
+	g.set_color(0, Color(1.0, 0.75, 0.3, 0.0))
+	g.add_point(0.08, Color(1.0, 0.62, 0.2, 0.75))
+	g.add_point(0.35, Color(0.85, 0.12, 0.04, 0.6))
+	g.add_point(0.7, Color(0.25, 0.02, 0.02, 0.35))
+	g.set_color(g.get_point_count() - 1, Color(0.05, 0.0, 0.0, 0.0))
 	p.color_ramp = g
 	p.z_index = -1
 	follow.add_child(p)
+	var smoke := CPUParticles2D.new()
+	smoke.amount = 70
+	smoke.lifetime = 1.8
+	smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	smoke.emission_sphere_radius = radius * 1.1
+	smoke.direction = Vector2(0, -1)
+	smoke.spread = 45.0
+	smoke.initial_velocity_min = 18.0
+	smoke.initial_velocity_max = 40.0
+	smoke.gravity = Vector2(0, -12)
+	smoke.damping_min = 6.0
+	smoke.damping_max = 12.0
+	smoke.texture = soft()
+	smoke.scale_amount_min = 1.0
+	smoke.scale_amount_max = 1.8
+	var c2 := Curve.new()
+	c2.add_point(Vector2(0, 0.4))
+	c2.add_point(Vector2(1, 1.4))
+	smoke.scale_amount_curve = c2
+	var g2 := Gradient.new()
+	g2.set_color(0, Color(0.1, 0.01, 0.02, 0.0))
+	g2.add_point(0.2, Color(0.12, 0.02, 0.03, 0.6))
+	g2.add_point(0.6, Color(0.18, 0.12, 0.13, 0.35))
+	g2.set_color(g2.get_point_count() - 1, Color(0.3, 0.28, 0.3, 0.0))
+	smoke.color_ramp = g2
+	smoke.z_index = -1
+	smoke.show_behind_parent = true
+	p.add_child(smoke)
 	p.emitting = true
+	smoke.emitting = true
 	return p

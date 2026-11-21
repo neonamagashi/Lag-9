@@ -62,6 +62,7 @@ const SLOW_OUTER := {1: 0.35, 2: 0.5, 3: 0.7}
 const LIFT_Z := {1: 34.0, 2: 22.0, 3: 6.0}
 const TICK := 0.5
 const KNOCK_FRICTION := 400.0
+const LIFT_REACH := 0.3
 const BOSS_FIELD_MULT := 0.3
 
 static var _frames := {}
@@ -170,11 +171,17 @@ func _update_visual(delta: float) -> void:
 		var sq := _squeeze
 		visual.scale *= Vector2(1.0 - 0.3 * sq, 1.0 - 0.14 * sq + 0.06 * sin(_spasm * 3.0))
 		visual.position += Vector2(randf_range(-1.0, 1.0), randf_range(-0.6, 0.6)) * (0.4 + sq)
+		# legs (or wings) thrash in the air, faster as the grip tightens, with the odd jolt of pain
 		_struggle_t -= delta
 		if _struggle_t <= 0.0:
-			_struggle_t = randf_range(0.08, 0.18) * (1.2 - sq * 0.5)
-			var f: int = STRUGGLE.get(kind, 1)
-			sprite.frame = f if sprite.frame != f else maxi(0, f - 1)
+			_struggle_t = randf_range(0.5, 1.1)
+			sprite.speed_scale = randf_range(1.8, 2.6) + sq
+			if randf() < 0.35:
+				play("hurt", true)
+				sprite.speed_scale = 1.0
+				_struggle_t = 0.2
+			else:
+				play("move")
 		if _grip:
 			_grip.position = Vector2(0, -z - body_height * 0.5)
 			_grip.queue_redraw()
@@ -261,14 +268,17 @@ func _physics_process(delta: float) -> void:
 		speed_mult = lerpf(1.0, 0.4, k) if zone == 2 else (0.15 if weight < 3 else SLOW_OUTER[3])
 		if resists:
 			speed_mult = maxf(speed_mult, 0.6)
-		target_z = LIFT_Z[weight] * (1.6 if sing else 1.0) + sin(Time.get_ticks_msec() / 300.0 + get_instance_id()) * 2.0
+		var depth := 1.0 if zone <= 1 else lerpf(0.5, 1.0, k)
+		target_z = LIFT_Z[weight] * depth * (1.6 if sing else 1.0) + sin(Time.get_ticks_msec() / 300.0 + get_instance_id()) * 2.0
 	if pinned and not was_pinned:
 		play("death", true)
 		sprite.pause()
 	elif was_pinned and not pinned:
 		play("idle", true)
 	var was_lifted := lifted
-	lifted = zone <= 1 and alive_w and w.mode == Witch.Mode.LIFT and (weight < 3 or sing) and not resists
+	var lift_k := clampf((w.r_outer() - dist) / (w.r_outer() - w.r_mid()), 0.0, 1.0) if alive_w else 0.0
+	# the barrier keeps enemies out of the middle ring, so Lift also takes the inner part of the outer band
+	lifted = alive_w and w.field_active and w.mode == Witch.Mode.LIFT and (zone <= 1 or (zone == 2 and lift_k > LIFT_REACH)) and (weight < 3 or sing) and not resists
 	if lifted and not was_lifted:
 		Fx.anim("lift_frame", global_position, 0.55, Color.WHITE, body_height * 0.5)
 	if was_lifted and not lifted and z > 4.0:
@@ -594,8 +604,8 @@ func grab(w: Witch) -> void:
 	_knock_t = 0.0
 	_hold_vel = velocity * 0.5
 	_squeeze = 0.0
+	_struggle_t = 0.0
 	play("hurt", true)
-	sprite.pause()
 	Fx.anim("lift_frame", global_position, 0.55, Color(0.8, 0.7, 1.0), body_height * 0.5)
 	_grip = Node2D.new()
 	_grip.z_index = 1
@@ -672,6 +682,7 @@ func _let_go() -> void:
 	_holder = null
 	visual.rotation = 0.0
 	_squeeze = 0.0
+	sprite.speed_scale = 1.0
 	if _grip:
 		_grip.queue_free()
 		_grip = null

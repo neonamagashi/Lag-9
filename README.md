@@ -64,8 +64,8 @@ The converter repacks animated tiles and marks walls and water solid (platform t
 ## Tests
 - `tests/play_test.tscn` (headless, ruins): every field rule, Rend, teleport, grab and throw, push, pull, jump, bosses and projectiles, then a bot plays all four waves.
 - `tests/limbo_test.tscn` (headless): arrival, the walk north, Begin, and the trial battle.
-- `tests/physics_test.tscn` (headless): grab squeeze and swing, thrown and pushed enemies colliding, friendly fire, line-of-fire sidestepping, dodging bombs.
-- `tests/shots_v4.tscn`: screenshots of floating, the Warden, hand casting and grabbing.
+- `tests/physics_test.tscn` (headless): grab squeeze and swing, thrown and pushed enemies colliding, friendly fire, line-of-fire sidestepping, dodging bombs, Lift and the slam.
+- `tests/shots_v5.tscn`: screenshots (and close crops) of the back view, lean, Warden, palm cast, charge effects, grab squirm, Lift and Singularity.
 - `tests/shots_vfx.tscn`: renders screenshots of each effect.
 
 See `CREDITS.md`.

@@ -95,8 +95,6 @@ func _draw() -> void:
 	if rv > 0.01:
 		_draw_zones(k, sing, lift, r_out, r_mid, r_in, shade, rv)
 	_draw_stars(lift, rv)
-	if witch.abilities_enabled and rv > 0.5:
-		_draw_aim(r_in)
 
 
 func _draw_zones(k: float, sing: bool, lift: bool, r_out: float, r_mid: float, r_in: float, shade: Color, rv: float) -> void:

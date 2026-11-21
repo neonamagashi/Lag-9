@@ -26,7 +26,9 @@ def vagrant(src, tone, cloth, style):
                     if p[3] == 0:
                         continue
                     rgb = p[:3]
-                    covered = (style == "loin" and 25 <= y <= 27) or (style == "tunic" and 19 <= y <= 27 and 12 <= x <= 19)
+                    side = fy // 32 in (1, 2, 3)
+                    loin = (y in (27, 28) and 12 <= x <= 19) or (y == 26 and 12 <= x <= (16 if side else 19))
+                    covered = (style == "loin" and loin) or (style == "tunic" and 19 <= y <= 27 and 12 <= x <= 19)
                     flap = style == "loin" and y in (28, 29) and x in (15, 16)
                     if (covered and rgb in (SKIN, SHADE)) or (flap and rgb == OUTLINE):
                         px[fx + x, fy + y] = (c if rgb == SKIN else cs) + (255,)
@@ -139,22 +141,26 @@ def warden2():
         ROBE, ROBE_F, CLOAK_IN = (24, 20, 32), (40, 34, 54), (8, 7, 11)
         wv = lambda k: math.sin(t * 2 + k) * 3
 
+        y0 = top + 18
+
         def edge(side, v):
             wind = 1.0 if side > 0 else 0.35
-            x = 18 + 10 * v + 78 * v ** 3 * (1.0 + 0.18 * wind)
+            # starts at the hood, wraps out over the shoulders, then billows to the floor
+            shoulder = min(1.0, v / 0.14)
+            x = 14 + 13 * (1 - (1 - shoulder) ** 2) + 8 * v + 76 * v ** 3 * (1.0 + 0.18 * wind)
             x += math.sin(v * 9 - t * 2 + side) * 3.5 * v * (0.5 + wind)
             return cx + side * x
 
         for side in (-1, 1):
             n = 40
-            outer = [(edge(side, i / n), sh - 2 + (fl - sh) * i / n) for i in range(n + 1)]
+            outer = [(edge(side, i / n), y0 + (fl - y0) * i / n) for i in range(n + 1)]
             # scalloped, lifting hem on the lee side
             hem = []
             for i in range(9):
                 hx = edge(side, 1.0) + (cx - edge(side, 1.0)) * i / 9.0
                 lift = (math.sin(t * 2 + i * 1.3) * 2.5 + 3) * (1.0 if side > 0 else 0.4) * (1 - i / 9.0)
                 hem.append((hx, fl - lift))
-            poly = [(cx, sh - 4)] + outer + hem + [(cx, fl)]
+            poly = [(cx, y0)] + outer + hem + [(cx, fl)]
             d.polygon(poly, fill=CLOAK_IN + (255,))
             d.line(outer, fill=RIM + (255,))
             # billowing folds following the bell
@@ -166,23 +172,23 @@ def warden2():
                     if v < 0.25:
                         continue
                     ex = edge(side, v)
-                    fold.append((cx + (ex - cx) * (0.35 + 0.6 * fk), sh + (fl - sh) * v))
+                    fold.append((cx + (ex - cx) * (0.35 + 0.6 * fk), y0 + (fl - y0) * v))
                 d.line(fold, fill=FOLD + (255,))
         # robe in front: shoulders, sleeves, long column into the floor
-        robe = [(cx - 13, sh - 6), (cx + 13, sh - 6), (cx + 22, sh + 4), (cx + 24, sh + 40), (cx + 20, sh + 60),
-                (cx + 24 + wv(1) * 0.5, fl - 2), (cx - 24 + wv(1) * 0.5, fl - 2), (cx - 20, sh + 60), (cx - 24, sh + 40), (cx - 22, sh + 4)]
+        robe = [(cx - 12, sh - 6), (cx + 12, sh - 6), (cx + 18, sh + 4), (cx + 20, sh + 40), (cx + 18, sh + 60),
+                (cx + 22 + wv(1) * 0.5, fl - 2), (cx - 22 + wv(1) * 0.5, fl - 2), (cx - 18, sh + 60), (cx - 20, sh + 40), (cx - 18, sh + 4)]
         d.polygon(robe, fill=ROBE + (255,))
         d.line(robe[1:6], fill=ROBE_F + (255,))
         # sleeves meeting at the front, hands hidden
-        d.polygon([(cx - 22, sh + 8), (cx - 3, sh + 34), (cx + 3, sh + 34), (cx + 22, sh + 8), (cx + 18, sh + 40), (cx - 18, sh + 40)], fill=BASE + (255,))
-        d.line([(cx - 22, sh + 8), (cx - 3, sh + 34)], fill=ROBE_F + (255,))
-        d.line([(cx + 22, sh + 8), (cx + 3, sh + 34)], fill=ROBE_F + (255,))
+        d.polygon([(cx - 18, sh + 8), (cx - 3, sh + 34), (cx + 3, sh + 34), (cx + 18, sh + 8), (cx + 16, sh + 40), (cx - 16, sh + 40)], fill=BASE + (255,))
+        d.line([(cx - 18, sh + 8), (cx - 3, sh + 34)], fill=ROBE_F + (255,))
+        d.line([(cx + 18, sh + 8), (cx + 3, sh + 34)], fill=ROBE_F + (255,))
         for k in range(5):
             x = cx - 12 + k * 6
             d.line([(x, sh + 44), (x + (k - 2) * 2 + wv(k) * 0.5, fl - 4)], fill=ROBE_F + (255,))
         # mantle over the shoulders
-        d.polygon([(cx - 16, sh - 8), (cx + 16, sh - 8), (cx + 25, sh + 8), (cx + 8, sh + 14), (cx - 8, sh + 14), (cx - 25, sh + 8)], fill=BASE + (255,))
-        d.line([(cx - 25, sh + 8), (cx - 8, sh + 14), (cx + 8, sh + 14), (cx + 25, sh + 8)], fill=FOLD + (255,))
+        d.polygon([(cx - 15, sh - 8), (cx + 15, sh - 8), (cx + 20, sh + 7), (cx + 7, sh + 13), (cx - 7, sh + 13), (cx - 20, sh + 7)], fill=BASE + (255,))
+        d.line([(cx - 20, sh + 7), (cx - 7, sh + 13), (cx + 7, sh + 13), (cx + 20, sh + 7)], fill=FOLD + (255,))
         # deep hood
         hood = [(cx - 15, sh - 4), (cx - 15, top + 14), (cx - 8, top + 2), (cx + 1, top - 3), (cx + 9, top + 3), (cx + 15, top + 14), (cx + 15, sh - 4)]
         d.polygon(hood, fill=BASE + (255,))
