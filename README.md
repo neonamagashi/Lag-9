@@ -14,7 +14,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F (hold, release) | Send: a runic smoke shockwave that pushes every enemy around her outward; impacts with walls or other enemies hurt |
 | T (hold, release) | Draw: the same wave pulled inward, dragging enemies into the crushing rings |
 | R | Rend: lift the 3 nearest enemies and tear them apart |
-| Space (hold to charge) | Snap: black smoke curls in around her feet while charging; a longer charge teleports further (96 to 192 px). teleport; the air rushes in behind her and her arrival billows smoke like dry ice |
+| Space (hold to charge) | Snap: black smoke curls in around her feet while charging; a longer charge teleports further (96 to 192 px). The air rushes in behind her and her arrival billows smoke like dry ice |
 | Shift / Mouse 5 (hold, release) | Jump: charge for height; clears ledges and objects, lands on the nearest open ground |
 | Q | Flip the field between Crush and Lift |
 | G | Singularity (60 mana): field grows 2.4x, black and white smoke billows beneath her |
