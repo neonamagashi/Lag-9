@@ -14,7 +14,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F (hold, release) | Send: a runic smoke shockwave that pushes every enemy around her outward; impacts with walls or other enemies hurt |
 | T (hold, release) | Draw: the same wave pulled inward, dragging enemies into the crushing rings |
 | R | Rend: lift the 3 nearest enemies and tear them apart |
-| Space (hold to charge) | Snap: black smoke curls in around her feet while charging; a longer charge teleports further (96 to 192 px). The air rushes in behind her and her arrival billows smoke like dry ice |
+| Space (hold to charge) | Snap: while moving she throws herself forward into it and leaves afterimages along the path; black smoke curls in around her feet while charging; a longer charge teleports further (96 to 192 px). The air rushes in behind her and her arrival billows smoke like dry ice |
 | Shift (hold) | Sprint (in Limbo, from the trial onward) |
 | Ctrl / Mouse 5 (hold, release) | Jump: charge for height; clears ledges and objects, lands on the nearest open ground |
 | Q | Flip the field between Crush and Lift |
@@ -25,7 +25,7 @@ Two playable areas: Limbo (the start) and the Ancient Ruins test arena (four wav
 | F1 / F5 | Help / restart |
 
 ## Limbo (Circle 1)
-The game starts here, as a scripted scene (lines in `assets/dialogue/limbo.json`; `*word*` in a line is an action cue, e.g. `*buuurp*`). Black, then a blinding flash: she arrives hungover in a pure white void and sees Whiskey wandering off north, meowing. She drifts north at a slowed, swaying pace through a crowd of about 56 souls that gets denser toward the Warden: groups muttering to each other about nothing, loners mumbling to themselves, some sitting, some wandering. The smell gets to her and she throws up (a rainbow). At the Warden, Whiskey slips past him, they talk (her thought bubbles show she isn't listening), she throws up again, and only then can she press E to Begin. The souls drift away, her field and abilities awaken, and three waves attack. Afterwards the Warden lets her pass. Broken marble columns and slabs are scattered through the crowd, with souls sitting on them. At the Warden she's drawn in and anchored in front of him while the camera pulls back for the conversation, then pans in again for Begin. After the trial she's drawn back in front of him to hear him out, and a portal behind him (a doorway lined with black smoke, blinding light inside, the one Whiskey slipped through) opens; walking into it leads to layer 2 (for now, Limbo starts over). Striking the Warden, possible only before or after the trial, does nothing but anger him: three warnings, then black smoke floods out of him faster than she can drift away, and Limbo starts over (later: back to her cabin). The whole level has reverb.
+The game starts here, as a scripted scene (lines in `assets/dialogue/limbo.json`; `*word*` in a line is an action cue, e.g. `*buuurp*`). Black, then a blinding flash: she arrives hungover in a pure white void and sees Whiskey wandering off north, meowing. She drifts north at a slowed, swaying pace through a crowd of about 56 souls that gets denser toward the Warden: groups muttering to each other about nothing, loners mumbling to themselves, some sitting, some wandering. The smell gets to her and she throws up (a rainbow). At the Warden, Whiskey slips past him, they talk (her thought bubbles show she isn't listening), she throws up again, and only then can she press E to Begin. The souls drift away, her field and abilities awaken, and three waves attack. Afterwards the Warden lets her pass. Her lines come with pauses so there's time to read and look around; the nausea hits about three-quarters of the way in. An invisible funnel narrows toward the Warden (the crowd lines its flanks near him) and lifts once they've met. Four souls can actually see her and answer "Not now..." (E to talk; quest-givers later). Broken marble columns and slabs are scattered through the crowd, with souls sitting on them. Nobody walks through the Warden's cloak; Whiskey goes around behind him and fades through the doorway. At the Warden she's drawn in and anchored in front of him while the camera pulls back for the conversation, then pans in again for Begin. After the trial she's drawn back in front of him to hear him out, and a portal behind him (a doorway lined with black smoke, blinding light inside, the one Whiskey slipped through) opens; walking into it leads to layer 2 (for now, Limbo starts over). Striking the Warden, possible only before or after the trial, does nothing but anger him: three warnings, then black smoke floods out of him faster than she can drift away, and Limbo starts over (later: back to her cabin). The whole level has reverb.
 
 Placeholder dialogue lives in `assets/dialogue/limbo.json` (edit the lines freely). Voices are babble sounds while text types out.
 
@@ -43,6 +43,10 @@ Three rings, sized from her height (40 px): inner = 1x her height wide, middle =
 - Damage over time shows as purple numbers every 0.5 s.
 
 Tuning lives at the top of `scripts/witch.gd` (abilities and ring sizes) and `scripts/enemy.gd` (enemy stats, per-zone damage, slow, scale, ranged attacks).
+
+## Runes
+
+Every spell sheds tiny Elder Futhark runes (`tools/gen_runes.py`, 19 glyphs, 5x7 px) that spin, drift and fade: along the beam's gravity band, around grabs and throws, in rings for Send/Draw, over Rend's targets, at both ends of a Snap, while charging, and in a churning swarm through Singularity.
 
 ## Enemy physics
 

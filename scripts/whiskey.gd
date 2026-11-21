@@ -2,7 +2,7 @@ class_name Whiskey
 extends Node2D
 ## Whiskey: walks to a point, meowing, and slips away.
 
-var target := Vector2.ZERO
+var path: Array = []
 var speed := 70.0
 var _sprite: AnimatedSprite2D
 var _meow_t := 0.3
@@ -35,15 +35,16 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	var to := target - position
+	if path.is_empty():
+		return
+	var to: Vector2 = path[0] - position
 	if to.length() < 3.0:
-		if not _gone:
+		path.pop_front()
+		if path.is_empty() and not _gone:
 			_gone = true
-			# slips through: a squeeze and a fade into the light
-			var t := create_tween().set_parallel()
-			t.tween_property(self, "scale", Vector2(0.2, 1.3), 0.35)
-			t.tween_property(self, "modulate", Color(1, 1, 1, 0), 0.35)
-			t.chain().tween_callback(queue_free)
+			var t := create_tween()
+			t.tween_property(self, "modulate:a", 0.0, 0.5)
+			t.tween_callback(queue_free)
 		return
 	position += to.normalized() * speed * delta
 	var d := to.normalized()

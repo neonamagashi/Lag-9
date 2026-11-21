@@ -41,13 +41,26 @@ def lowpass(x, k):
     return y
 
 
+def band(x, lo, hi):
+    """Smooth band-pass in the frequency domain (Hz)."""
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    gain = 1 / (1 + (lo / np.maximum(f, 1)) ** 4) / (1 + (f / hi) ** 4)
+    return np.fft.irfft(X * gain, len(x))
+
+
 def snap():
-    n = len(t(0.12))
-    noise = rng.standard_normal(n)
-    hp = noise - lowpass(noise, 0.35)
-    click = hp * env(n, 0.0005, 0.012)
-    tone = np.sin(2 * np.pi * 2300 * t(0.12)) * env(n, 0.0005, 0.008) * 0.4
-    return click + tone
+    """A finger snap: a breath of skin friction, a sharp crack peaking around 2-4 kHz, and the hollow pop of the palm."""
+    pre_n = int(SR * 0.02)
+    pre = band(rng.standard_normal(pre_n), 2500, 7000) * np.linspace(0.0, 0.1, pre_n) ** 1.5
+    n = int(SR * 0.09)
+    tt = np.arange(n) / SR
+    crack = band(rng.standard_normal(n), 1800, 4500) * np.exp(-tt / 0.004) * 2.2
+    air = band(rng.standard_normal(n), 4500, 9000) * np.exp(-tt / 0.0015) * 0.5
+    pop = np.sin(2 * np.pi * 330 * tt) * np.exp(-tt / 0.028) * 0.5
+    knock = np.sin(2 * np.pi * 1200 * tt) * np.exp(-tt / 0.008) * 0.35
+    out = np.concatenate([pre, crack + air + pop + knock])
+    return out / np.max(np.abs(out))
 
 
 def syllable(f0, dur, vowel):

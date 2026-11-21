@@ -152,13 +152,62 @@ def palm_orb(fr, hand, big):
 
 
 def backify(fr, f=0, n=6):
-    """From behind: her hair covers the back of her head and drapes over the shoulder and arm on its side."""
+    """From behind: one mass of white hair under the hat, like the wind-blown cast frames but hanging at rest."""
     fr = dewand(fr)
     px = fr.load()
     w, h = fr.size
     box = face_box(fr)
     if not box:
         return fr
+    top = box[1] + 2
+    hair = {HAIR[:3], HAIR_D[:3]}
+    cx = (box[0] + box[2]) / 2.0
+    rows = [y for y in range(h) if any(px[x, y][3] == 255 for x in range(w))]
+    bottom = max(rows)
+    body = [x for y in range(top + 6, bottom - 2) for x in range(w) if px[x, y][3] == 255 and px[x, y][:3] not in hair]
+    bl, br = (min(body), max(body)) if body else (box[0], box[2])
+    outside = sum(1 for y in range(h) for x in range(w) if px[x, y][:3] in hair and (x < bl - 2 or x > br + 2))
+    left = sum(1 for y in range(top, top + 14) for x in range(0, int(cx)) if 0 <= y < h and px[x, y][:3] in hair)
+    right = sum(1 for y in range(top, top + 14) for x in range(int(cx), w) if 0 <= y < h and px[x, y][:3] in hair)
+    side = -1  # her hair always hangs on the same side in the source frames
+    filled = set()
+    # the back of the head, brim to nape
+    for y in range(top - 1, min(h, top + 5)):
+        for x in range(box[0], box[2] + 1):
+            if px[x, y][3] == 255:
+                filled.add((x, y))
+    if outside < 8:
+        # at rest: hair falls over the back and the shoulder on its side, bulging past her outline
+        end = top + int((bottom - top) * 0.6)
+        sway = round(math.sin(f / max(1, n) * math.tau))
+        for y in range(top + 5, end + 1):
+            run = [x for x in range(w) if px[x, y][3] == 255]
+            if not run:
+                continue
+            xl, xr = min(run), max(run)
+            k = (y - top - 5) / max(1, end - top - 5)
+            bulge = round(2.2 * math.sin(math.pi * min(1.0, k * 1.15)))
+            drift = sway if k > 0.6 else 0
+            inner = cx + 3.5 - 7.0 * k ** 2.2
+            if side < 0:
+                a0, b0 = xl - bulge + drift, int(inner) + drift
+            else:
+                a0, b0 = int(2 * cx - inner) + drift, xr + bulge + drift
+            for x in range(max(0, a0), min(w - 1, b0) + 1):
+                filled.add((x, y))
+    for (x, y) in filled:
+        px[x, y] = HAIR
+    for (x, y) in filled:
+        outer = (x - 1, y) not in filled and px[max(0, x - 1), y][:3] not in hair or (x + 1, y) not in filled and px[min(w - 1, x + 1), y][:3] not in hair
+        below = (x, y + 1) not in filled and px[x, min(h - 1, y + 1)][:3] not in hair and y > top + 4
+        if outer or below:
+            px[x, y] = HAIR_D
+    # a soft shadow line down the lock, like the front
+    if outside < 8:
+        for (x, y) in filled:
+            if y > top + 6 and (x + side * 2, y) in filled and (x - side, y) not in filled and (x + side * 3, y) in filled:
+                px[x + side * 2, y] = HAIR_D
+    return fr
     top = box[1] + 2
     hair = {HAIR[:3], HAIR_D[:3]}
     cx = (box[0] + box[2]) / 2.0

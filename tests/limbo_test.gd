@@ -25,6 +25,8 @@ func _ready() -> void:
 		max_keel = maxf(max_keel, 1.0 if w.pose == "hunch" else 0.0)
 		if main.limbo.stage == Limbo.Stage.WALK:
 			slow_speed = maxf(slow_speed, w.velocity.length())
+		if w.pose == "hunch" and not marks.has("vomit_y"):
+			marks["vomit_y"] = int(w.global_position.y)
 		await get_tree().physics_frame
 	Input.action_release("move_up")
 	await _frames(10)

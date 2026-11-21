@@ -178,6 +178,45 @@ static func anim(key: String, pos: Vector2, scale := 1.0, tint := Color.WHITE, h
 	return s
 
 
+static var _rune_tex: Texture2D
+const RUNE_COUNT := 19
+
+
+## Tiny Futhark runes that spin, drift and fade: the visible grammar of her spells.
+static func runes(pos: Vector2, n: int, spread: Vector2, rise := 10.0, life := 0.9, behind := false) -> void:
+	if not _rune_tex:
+		_rune_tex = load("res://assets/vfx/runes.png")
+	var c := Color(0.24, 0.1, 0.45) if dark_world else Color(0.78, 0.64, 1.0)
+	for i in n:
+		var r := Sprite2D.new()
+		var at := AtlasTexture.new()
+		at.atlas = _rune_tex
+		at.region = Rect2((randi() % RUNE_COUNT) * 7, 0, 7, 9)
+		r.texture = at
+		var a := randf() * TAU
+		r.position = pos + Vector2(cos(a) * spread.x, sin(a) * spread.y) * sqrt(randf())
+		r.rotation = randf_range(-0.6, 0.6)
+		r.modulate = Color(c, 0.0)
+		r.z_index = 0 if behind else 9
+		world.add_child(r)
+		var spin := randf_range(1.2, 3.2) * (1.0 if randf() < 0.5 else -1.0)
+		var t := r.create_tween().set_parallel()
+		t.tween_property(r, "modulate:a", 0.95, life * 0.2)
+		t.tween_property(r, "rotation", r.rotation + spin, life)
+		t.tween_property(r, "position", r.position + Vector2(randf_range(-4, 4), -rise * randf_range(0.6, 1.2)), life).set_ease(Tween.EASE_OUT)
+		t.tween_property(r, "scale", Vector2.ONE * 0.6, life).set_delay(life * 0.4)
+		t.tween_property(r, "modulate:a", 0.0, life * 0.6).set_delay(life * 0.4)
+		t.chain().tween_callback(r.queue_free)
+
+
+## Runes strewn along a line (a beam, a throw).
+static func runes_line(a: Vector2, b: Vector2, n: int, width: float, behind := false) -> void:
+	var dir := (b - a).normalized()
+	var side := Vector2(-dir.y, dir.x)
+	for i in n:
+		runes(a.lerp(b, randf()) + side * randf_range(-width, width), 1, Vector2(2, 2), 8.0, randf_range(0.6, 1.0), behind)
+
+
 static func ghost(actor: Actor) -> void:
 	var g := Sprite2D.new()
 	g.texture = actor.sprite.sprite_frames.get_frame_texture(actor.sprite.animation, actor.sprite.frame)

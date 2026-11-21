@@ -79,6 +79,7 @@ var _lean := 0.0
 var _north := false
 var _dip := 0.0
 var _snap_fx: CPUParticles2D
+var _rune_t := 0.0
 var field_active := true
 var aim := Vector2.RIGHT
 var aim_point: Variant = null
@@ -204,6 +205,9 @@ func _update_visual(delta: float) -> void:
 	visual.position.y -= hover
 	# floating: head leans into the drift (shear pivots at her feet)
 	var lean := clampf(velocity.x / SPEED, -1.0, 1.0) * 0.12 * (1.0 if z <= 0.0 else 0.4)
+	if snap_charge >= 0.0 and velocity.length() > 10.0:
+		# bracing to snap while moving: thrown forward into it, like a sprinter off the line
+		lean = signf(velocity.x) * (0.22 + 0.14 * snap_charge / SNAP_MAX_CHARGE) if absf(velocity.x) > 5.0 else 0.0
 	_lean = lerpf(_lean, lean, 1.0 - exp(-delta * 8.0))
 	visual.skew = _lean
 	if drunk:
@@ -237,6 +241,17 @@ func _physics_process(delta: float) -> void:
 	_iframes -= delta
 	var drift := clampf(velocity.length() / SPEED, 0.0, 1.0)
 	hover = HOVER + drift * 1.5 + sin(_t * (2.2 + drift * 1.4)) * (1.2 + drift * 0.6)
+	_rune_t -= delta
+	if _rune_t <= 0.0:
+		if singularity_t > 0.0:
+			# a churning swarm of runes around her while the Singularity holds
+			_rune_t = 0.04
+			var a := randf() * TAU
+			var rr := r_inner() * randf_range(0.6, 2.2)
+			Fx.runes(global_position + Vector2(cos(a) * rr, sin(a) * rr * ELLIPSE), 2, Vector2(3, 2), 18.0, 1.1)
+		elif send_charge >= 0.0 or draw_charge >= 0.0 or throw_charge >= 0.0 or snap_charge >= 0.0:
+			_rune_t = 0.14
+			Fx.runes(hand_tip() if snap_charge < 0.0 else global_position, 1, Vector2(9, 6), 8.0, 0.7)
 	if singularity_t > 0.0:
 		singularity_t -= delta
 		if singularity_t <= 0.0:
@@ -262,7 +277,7 @@ func _physics_process(delta: float) -> void:
 	if aim == Vector2.ZERO:
 		aim = Vector2.RIGHT * facing
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down") if not frozen else Vector2.ZERO
-	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0 or snap_charge >= 0.0
+	var charging := send_charge >= 0.0 or draw_charge >= 0.0 or jump_charge >= 0.0
 	var sprinting := sprint_enabled and not charging and not frozen and Input.is_action_pressed("sprint")
 	var spd := SPEED * (0.45 if charging else (SPRINT if sprinting else 1.0)) * move_mult
 	velocity = velocity.move_toward(dir * spd, ACCEL * delta * (0.35 if z > 0.0 else 1.0))
@@ -445,6 +460,7 @@ func _pierce() -> void:
 	if hit:
 		length = ground.distance_to(hit.position) + 6.0
 	Fx.beam(tip, dir, length, _north, PIERCE_BAND)
+	Fx.runes_line(tip, tip + dir * length, int(clampf(length / 22.0, 3.0, 10.0)), PIERCE_BAND, _north)
 	Sfx.play("beam", 0.08, -8.0)
 	# the beam is a thin core inside a wider, unseen band of gravity: the band hurts too and shoves aside
 	for e in get_tree().get_nodes_in_group("enemies"):
@@ -480,6 +496,7 @@ func _grab_input(delta: float) -> void:
 		throw_charge = minf(throw_charge + delta, THROW_MAX_CHARGE)
 		if not Input.is_action_pressed("grab") and held:
 			var k := throw_charge / THROW_MAX_CHARGE
+			Fx.runes_line(held.global_position, held.global_position + aim * 70.0, 4 + int(4 * k), 8.0)
 			held.release(aim, lerpf(220.0, 560.0, k), lerpf(6.0, 18.0, k))
 			Sfx.play("push_wave", 0.08, -6.0 + 4.0 * k)
 			Fx.shake(1.5 + 2.0 * k)
@@ -511,6 +528,7 @@ func _grab() -> void:
 		return
 	held = best
 	best.grab(self)
+	Fx.runes(best.global_position + Vector2(0, -best.body_height * 0.5), 5, Vector2(12, 8), 10.0, 0.9)
 	_cast_t = 0.3
 	Sfx.play("grab", 0.08, -4.0)
 
@@ -538,6 +556,7 @@ func _push(k: float) -> void:
 		if field_dist(n.global_position) < rng + n.get_meta("radius", 20.0):
 			n.get_meta("on_hit").call()
 	Fx.wave(global_position, r_inner(), rng, 0.35 + 0.1 * k, false)
+	_rune_ring(rng * 0.75, 10)
 	Sfx.play("push_wave", 0.05, -6.0 + 4.0 * k)
 	Fx.shake(1.5 + 2.5 * k)
 
@@ -553,6 +572,7 @@ func _pull(k: float) -> void:
 		if field_dist(e.global_position) < rng and to.length() > 8.0:
 			e.knock(to.normalized(), clampf(to.length() * 2.6, 140.0, 380.0) * lerpf(0.8, 1.2, k), lerpf(3.0, 8.0, k), true)
 	Fx.wave(global_position, rng, r_inner(), 0.4 + 0.1 * k, true)
+	_rune_ring(rng * 0.6, 10)
 	Sfx.play("pull_wave", 0.05, -6.0 + 4.0 * k)
 
 
@@ -569,6 +589,7 @@ func _rend() -> void:
 	Sfx.play("rend", 0.05, -2.0)
 	for i in mini(REND_TARGETS, targets.size()):
 		targets[i].rend(REND_LIFT_TIME + 0.07 * i, REND_DMG)
+		Fx.runes(targets[i].global_position + Vector2(0, -targets[i].body_height * 0.5), 6, Vector2(10, 8), 14.0, 1.0)
 
 
 func _singularity() -> void:
@@ -579,6 +600,7 @@ func _singularity() -> void:
 	Sfx.play("singularity", 0.0, 0.0)
 	Fx.shake(4.0)
 	_sing_smoke = Fx.ground_smoke(self, R_INNER * 0.7)
+	_rune_ring(r_inner() * 1.6, 24)
 
 
 func _jump(k: float) -> void:
@@ -589,6 +611,7 @@ func _jump(k: float) -> void:
 	cooldowns.jump = 0.2
 	velocity *= 1.15
 	Sfx.play("jump", 0.08, -6.0)
+	Fx.runes(global_position, 3, Vector2(10, 4), 6.0, 0.7, true)
 	Fx.burst(global_position, Color(0.6, 0.58, 0.66), 6, 40.0, 1.0)
 
 
@@ -601,6 +624,12 @@ func _land() -> void:
 	Sfx.play("land", 0.08, -8.0)
 	Fx.burst(global_position, Color(0.6, 0.58, 0.66), 8, 45.0, 1.0)
 	squash = 0.2
+
+
+func _rune_ring(radius: float, n: int) -> void:
+	for i in n:
+		var a := i * TAU / n + randf_range(-0.2, 0.2)
+		Fx.runes(global_position + Vector2(cos(a) * radius, sin(a) * radius * ELLIPSE), 1, Vector2(3, 2), 10.0, randf_range(0.7, 1.1))
 
 
 func _teleport(dir: Vector2, dist := SNAP_DIST) -> void:
@@ -626,12 +655,30 @@ func _teleport(dir: Vector2, dist := SNAP_DIST) -> void:
 	send_charge = -1.0
 	draw_charge = -1.0
 	Fx.implode(from)
+	Fx.runes(from, 4, Vector2(8, 5), 10.0, 0.8)
+	var lunging := velocity.length() > 20.0
+	# afterimages strung along the path, so the jump reads as a burst of speed
+	for i in 4:
+		var g := Sprite2D.new()
+		g.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+		g.centered = false
+		g.flip_h = sprite.flip_h
+		g.offset = sprite.offset
+		g.skew = visual.skew
+		g.position = from.lerp(to, (i + 1) / 5.0) + Vector2(0, -z - hover)
+		g.modulate = Color(0.25, 0.12, 0.45, 0.5 - i * 0.08) if lunging else Color(0.25, 0.12, 0.45, 0.0)
+		g.z_index = -1
+		Fx.world.add_child(g)
+		var gt := g.create_tween()
+		gt.tween_property(g, "modulate:a", 0.0, 0.25 + i * 0.05)
+		gt.tween_callback(g.queue_free)
 	global_position = to
 	velocity = dir * SPEED * 0.5
 	reset_physics_interpolation()
 	Fx.displace(to, self)
-	Sfx.play("snap_click", 0.05, -12.0)
-	visual.scale = Vector2(0.5, 1.4)
+	Fx.runes(to, 5, Vector2(10, 6), 14.0, 0.9)
+	Sfx.play("snap_click", 0.05, -6.0)
+	visual.scale = Vector2(1.5, 0.75) if lunging and absf(dir.x) > 0.4 else Vector2(0.5, 1.4)
 	var t := create_tween()
 	t.tween_property(visual, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

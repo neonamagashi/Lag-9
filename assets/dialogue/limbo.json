@@ -12,12 +12,13 @@
 	"witch_cat": "I'm looking for my cat, so pretty sure I'm meant to *buuurp* be here.",
 	"warden_3": "He's YOUR cat? Interesting. He's here all the time.",
 	"witch_shock": "ALL the time? ...how many drunk portals have I made...",
-	"warden_4": "If you seek your cat, pass my trial. For if you can't, the layers below will eat you alive.",
+	"warden_4": "If you seek your cat of Whiskey, you must first pass my trial, for it only gets worse below.",
 	"witch_laugh": "Pfft... hahaha!",
 	"warden_pass": "...Hm. You may pass, witch.",
 	"warden_sins": "But be wary of your sins. Below, they grow heavier.",
 	"warden_hit_1": "Stop.",
 	"warden_hit_2": "...Begone.",
 	"warden_hit_3": "Seriously... cut it out.",
-	"warden_doom": "So be it."
+	"warden_doom": "So be it.",
+	"talker": "Not now..."
 }

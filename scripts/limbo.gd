@@ -3,6 +3,11 @@ extends Node2D
 
 const WARDEN_AT := Vector2(0, -2200)
 const BOUNDS := Rect2(-560, -2470, 1120, 2670)
+## His cloak's train on the floor: nobody walks through it.
+const CLOAK_C := Vector2(6, -14)
+const CLOAK_R := Vector2(112, 23)
+const NAUSEA_Y := -1150.0
+const TALKERS := [Vector2(-70, -640), Vector2(95, -1050), Vector2(-100, -1450), Vector2(80, -1800)]
 const LINES_PATH := "res://assets/dialogue/limbo.json"
 const SLOW := 0.55
 const MEET_DIST := 150.0
@@ -21,7 +26,7 @@ const GROUP_LINES := ["did you see the price of turnips?", "...and then he said 
 	"spoons go on the left.", "it's all in the paperwork.", "was it the second drawer?", "I always said that.",
 	"...exactly.", "hm. quite.", "my cousin had a goat.", "four across was 'umbrella'.", "the good scissors, though."]
 
-enum Stage { INTRO, PEOPLE, BUSY, WALK, READY, TRIAL, PASSED, DOOM }
+enum Stage { INTRO, PEOPLE, BUSY, NAUSEA, WALK, READY, TRIAL, PASSED, DOOM }
 
 const ANCHOR := Vector2(0, 112)
 const CUT_ZOOM := 0.7
@@ -50,6 +55,9 @@ var _doom_smoke: CPUParticles2D
 var _portal: Node2D
 var _portal_block: StaticBody2D
 var _portal_t := 0.0
+var _funnel: StaticBody2D
+var _talkers: Array[Vagrant] = []
+var _talk_prompt: Label
 
 
 func setup(m: Node, w: Witch) -> void:
@@ -88,6 +96,16 @@ func _ready() -> void:
 	_prompt.visible = false
 	_prompt.z_index = 40
 	main.world.add_child(_prompt)
+	_talk_prompt = Label.new()
+	_talk_prompt.text = "[E] Talk"
+	_talk_prompt.add_theme_font_size_override("font_size", 7)
+	_talk_prompt.add_theme_color_override("font_color", Color(0.15, 0.12, 0.2))
+	_talk_prompt.add_theme_color_override("font_outline_color", Color(1, 1, 1))
+	_talk_prompt.add_theme_constant_override("outline_size", 3)
+	_talk_prompt.visible = false
+	_talk_prompt.z_index = 40
+	main.world.add_child(_talk_prompt)
+	_build_funnel()
 	witch.interact.connect(_on_interact)
 	_arrive()
 
@@ -98,12 +116,19 @@ func _populate() -> void:
 	rng.seed = 21
 	var taken: Array[Vector2] = []
 	var spot := func(spread: float) -> Vector2:
+		var span := -WARDEN_AT.y - 170.0 - 240.0
 		for i in 60:
-			# denser the further north she gets
-			var p := Vector2(rng.randf_range(-380, 380), -240.0 - 1740.0 * sqrt(rng.randf()))
+			# denser the further north she gets; near him they line the flanks of the way in
+			var f := sqrt(rng.randf())
+			var y := -240.0 - span * f
+			var x := rng.randf_range(-380, 380)
+			if f > 0.55:
+				var lane := _lane(y)
+				x = (1.0 if rng.randf() < 0.5 else -1.0) * rng.randf_range(lane * 0.7, lane + 230.0)
+			var p := Vector2(x, y)
 			if taken.all(func(q): return q.distance_to(p) > spread):
 				return p
-		return Vector2(rng.randf_range(-380, 380), rng.randf_range(-1900, -300))
+		return Vector2(rng.randf_range(-380, 380), rng.randf_range(WARDEN_AT.y + 200.0, -300.0))
 	# broken marble scattered through the crowd: souls sit on the slabs and loiter by the columns
 	for i in RUIN_LAYOUT.size():
 		var kind: String = RUIN_LAYOUT[i]
@@ -119,6 +144,12 @@ func _populate() -> void:
 		elif seat == 0.0 and rng.randf() < 0.6:
 			var v := _soul(p + Vector2(rng.randf_range(14, 20) * (1 if rng.randf() < 0.5 else -1), 6), rng, Vagrant.Mode.STAND)
 			v.face = Vector2.from_angle(rng.randf() * TAU)
+	# a few souls who can actually see her
+	for t in TALKERS:
+		taken.append(t)
+		var v := _soul(t, rng, Vagrant.Mode.STAND)
+		v.face = Vector2(-signf(t.x), 0.4).normalized()
+		_talkers.append(v)
 	for gi in GROUP_SIZES.size():
 		var size: int = GROUP_SIZES[gi]
 		# the first group stands just ahead of where she arrives, so she notices them
@@ -164,6 +195,17 @@ func _ruin(kind: String, p: Vector2) -> void:
 		col.shape = c
 	body.add_child(col)
 	s.add_child(body)
+
+
+## Half-width of the way in at height y: wide at the start, narrowing toward him.
+func _lane(y: float) -> float:
+	var f := clampf((y + 350.0) / (WARDEN_AT.y + 190.0 + 350.0), 0.0, 1.0)
+	return lerpf(470.0, 170.0, f)
+
+
+static func in_cloak(p: Vector2, margin := 0.0) -> bool:
+	var d := p - (WARDEN_AT + CLOAK_C)
+	return pow(d.x / (CLOAK_R.x + margin), 2.0) + pow(d.y / (CLOAK_R.y + margin * 0.4), 2.0) < 1.0
 
 
 func _soul(p: Vector2, rng: RandomNumberGenerator, mode: Vagrant.Mode) -> Vagrant:
@@ -246,27 +288,36 @@ func _arrive() -> void:
 	ft.tween_interval(0.25)
 	ft.tween_property(_flash, "color:a", 0.0, 2.2).set_ease(Tween.EASE_IN)
 	await _wait(1.6)
-	_cat(witch.global_position + Vector2(18, -60), witch.global_position + Vector2(40, -460), 62.0)
+	_cat(witch.global_position + Vector2(18, -60), [witch.global_position + Vector2(40, -460)], 62.0)
 	await _wait(1.0)
 	await _line("cat_seen")
-	await _wait(2.2)
+	await _wait(3.2)
 	await _line("cat_gone")
 	stage = Stage.PEOPLE
 
 
+## Unhurried: pauses between lines so there's time to read and look around; the nausea hits further in.
 func _people() -> void:
 	stage = Stage.BUSY
 	await _line("people_1")
+	await _wait(2.0)
 	await _line("people_2")
+	await _wait(2.4)
 	await _line("people_3")
+	stage = Stage.NAUSEA
+
+
+func _nausea() -> void:
+	stage = Stage.BUSY
 	await _vomit()
+	await _wait(0.6)
 	await _line("hangover")
 	stage = Stage.WALK
 
 
 func _meet() -> void:
 	stage = Stage.BUSY
-	_cat(WARDEN_AT + Vector2(-110, 90), PORTAL_AT, 58.0)
+	_cat(WARDEN_AT + Vector2(-110, 90), [WARDEN_AT + Vector2(-150, 12), WARDEN_AT + Vector2(-95, -52), WARDEN_AT + Vector2(40, -70), PORTAL_AT], 58.0)
 	await _cut_in()
 	await _wait(0.8)
 	await _line("cat_again")
@@ -285,6 +336,9 @@ func _meet() -> void:
 	Sfx.play("laugh", 0.05, -4.0)
 	await _line("witch_laugh")
 	await _vomit()
+	witch.drunk = false
+	if is_instance_valid(_funnel):
+		_funnel.queue_free()
 	await _cut_out()
 	witch.abilities_enabled = true
 	main.hud.show_abilities = true
@@ -483,10 +537,10 @@ func _bubble(kind: String, at: Vector2) -> Sprite2D:
 	return b
 
 
-func _cat(from: Vector2, to: Vector2, speed: float) -> void:
+func _cat(from: Vector2, path: Array, speed: float) -> void:
 	var c := Whiskey.new()
 	c.position = from
-	c.target = to
+	c.path = path
 	c.speed = speed
 	main.world.add_child(c)
 
@@ -511,15 +565,35 @@ func _process(delta: float) -> void:
 			_enter_portal()
 	match stage:
 		Stage.PEOPLE:
-			if p.y < -450.0 or _vagrants.any(func(v): return v.global_position.distance_to(p) < 130.0):
+			if p.y < -300.0:
 				_people()
+		Stage.NAUSEA:
+			if p.y < NAUSEA_Y:
+				_nausea()
 		Stage.WALK:
 			if p.distance_to(WARDEN_AT) < MEET_DIST + 110.0:
 				_meet()
 	_prompt.visible = stage == Stage.READY and p.distance_to(WARDEN_AT) < MEET_DIST + 40.0
+	var near := _near_talker()
+	_talk_prompt.visible = near != null and not witch.frozen
+	if near:
+		_talk_prompt.position = near.global_position + Vector2(-16, -46)
+
+
+func _near_talker() -> Vagrant:
+	if stage in [Stage.TRIAL, Stage.DOOM]:
+		return null
+	for v in _talkers:
+		if is_instance_valid(v) and not v.leaving and v.global_position.distance_to(witch.global_position) < 34.0:
+			return v
+	return null
 
 
 func _on_interact() -> void:
+	var talker := _near_talker()
+	if talker:
+		talker.speak(_text("talker") if _text("talker") != "" else "Not now...", true)
+		return
 	if stage != Stage.READY or witch.global_position.distance_to(WARDEN_AT) > MEET_DIST + 40.0:
 		return
 	stage = Stage.TRIAL
@@ -666,6 +740,23 @@ func _consumed() -> void:
 	Game.change_level("limbo")
 
 
+# ---------- the way in ----------
+## Invisible walls that narrow toward him, steering her in; they lift once they've met.
+func _build_funnel() -> void:
+	_funnel = StaticBody2D.new()
+	_funnel.collision_layer = 8
+	add_child(_funnel)
+	var top := WARDEN_AT.y + 190.0
+	for side in [-1.0, 1.0]:
+		for seg in [[Vector2(470, -350), Vector2(170, top)], [Vector2(170, top), Vector2(300, WARDEN_AT.y + 40.0)]]:
+			var col := CollisionShape2D.new()
+			var sh := SegmentShape2D.new()
+			sh.a = Vector2(seg[0].x * side, seg[0].y)
+			sh.b = Vector2(seg[1].x * side, seg[1].y)
+			col.shape = sh
+			_funnel.add_child(col)
+
+
 # ---------- the portal ----------
 ## A doorway behind the Warden: lined with black smoke, blinding light inside. Whiskey slips through it.
 func _build_portal() -> void:
@@ -682,31 +773,32 @@ func _build_portal() -> void:
 	_portal.add_child(glow)
 	var pts := PackedVector2Array()
 	var normals := PackedVector2Array()
-	for k in 40:
-		var t := k / 40.0
+	# hugging the frame: points just outside its edge
+	for k in 48:
+		var t := k / 48.0
 		if t < 0.3:
-			pts.append(Vector2(-16, -t / 0.3 * 40.0))
+			pts.append(Vector2(-19, -t / 0.3 * 42.0))
 			normals.append(Vector2.LEFT)
 		elif t < 0.7:
 			var a := PI + (t - 0.3) / 0.4 * PI
-			pts.append(Vector2(cos(a) * 16.0, -40.0 + sin(a) * 14.0))
+			pts.append(Vector2(cos(a) * 19.0, -42.0 + sin(a) * 17.0))
 			normals.append(Vector2(cos(a), sin(a)))
 		else:
-			pts.append(Vector2(16, -(1.0 - (t - 0.7) / 0.3) * 40.0))
+			pts.append(Vector2(19, -(1.0 - (t - 0.7) / 0.3) * 42.0))
 			normals.append(Vector2.RIGHT)
 	var smoke := CPUParticles2D.new()
-	smoke.amount = 90
-	smoke.lifetime = 1.4
+	smoke.amount = 140
+	smoke.lifetime = 0.9
 	smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_DIRECTED_POINTS
 	smoke.emission_points = pts
 	smoke.emission_normals = normals
-	smoke.spread = 25.0
-	smoke.initial_velocity_min = 6.0
-	smoke.initial_velocity_max = 16.0
-	smoke.gravity = Vector2(0, -8)
+	smoke.spread = 20.0
+	smoke.initial_velocity_min = 3.0
+	smoke.initial_velocity_max = 8.0
+	smoke.gravity = Vector2(0, -10)
 	smoke.texture = Fx.soft()
-	smoke.scale_amount_min = 0.4
-	smoke.scale_amount_max = 0.9
+	smoke.scale_amount_min = 0.12
+	smoke.scale_amount_max = 0.3
 	var g := Gradient.new()
 	g.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
 	g.add_point(0.15, Color(0.02, 0.0, 0.03, 0.9))
@@ -714,6 +806,40 @@ func _build_portal() -> void:
 	g.set_color(g.get_point_count() - 1, Color(0.2, 0.18, 0.22, 0.0))
 	smoke.color_ramp = g
 	_portal.add_child(smoke)
+	# fire-smoke: billowing up and away off the top and upper sides, faintly ember-lit at its root
+	var plume := CPUParticles2D.new()
+	plume.amount = 60
+	plume.lifetime = 1.8
+	plume.emission_shape = CPUParticles2D.EMISSION_SHAPE_DIRECTED_POINTS
+	var up_pts := PackedVector2Array()
+	var up_n := PackedVector2Array()
+	for k in 16:
+		var a := PI + 0.15 + k / 15.0 * (PI - 0.3)
+		up_pts.append(Vector2(cos(a) * 19.0, -42.0 + sin(a) * 17.0))
+		up_n.append(Vector2(cos(a) * 0.6, -1.0).normalized())
+	plume.emission_points = up_pts
+	plume.emission_normals = up_n
+	plume.spread = 18.0
+	plume.initial_velocity_min = 10.0
+	plume.initial_velocity_max = 24.0
+	plume.gravity = Vector2(0, -16)
+	plume.damping_min = 2.0
+	plume.damping_max = 6.0
+	plume.texture = Fx.soft()
+	plume.scale_amount_min = 0.25
+	plume.scale_amount_max = 0.55
+	var pc := Curve.new()
+	pc.add_point(Vector2(0, 0.4))
+	pc.add_point(Vector2(1, 1.6))
+	plume.scale_amount_curve = pc
+	var pg := Gradient.new()
+	pg.set_color(0, Color(0.45, 0.12, 0.04, 0.0))
+	pg.add_point(0.08, Color(0.35, 0.08, 0.03, 0.7))
+	pg.add_point(0.3, Color(0.06, 0.02, 0.02, 0.75))
+	pg.add_point(0.7, Color(0.12, 0.1, 0.12, 0.4))
+	pg.set_color(pg.get_point_count() - 1, Color(0.3, 0.28, 0.3, 0.0))
+	plume.color_ramp = pg
+	_portal.add_child(plume)
 	_portal_block = StaticBody2D.new()
 	_portal_block.collision_layer = 1
 	var col := CollisionShape2D.new()
@@ -726,16 +852,11 @@ func _build_portal() -> void:
 
 func _draw_portal() -> void:
 	var pulse := 0.5 + 0.5 * sin(_portal_t * 3.0)
-	# light spilling onto the floor in front of it
-	for i in 3:
-		var w := 22.0 + i * 8.0
-		_portal.draw_colored_polygon(PackedVector2Array([Vector2(-16, 0), Vector2(16, 0), Vector2(w, 10.0 + i * 5.0), Vector2(-w, 10.0 + i * 5.0)]),
-			Color(1.0, 0.95, 0.7, (0.22 - i * 0.06) * (0.8 + 0.2 * pulse)))
-	# the frame, then the light filling it, brightest at the heart
+	# the frame, then the light filling it: gold only along the arch and sides, white at the heart and threshold
 	_door(Vector2.ZERO, 18.0, 42.0, Color(0.0, 0.0, 0.01))
 	var cols := [Color(1.0, 0.78, 0.3), Color(1.0, 0.88, 0.5), Color(1.0, 0.95, 0.75), Color(1.0, 0.99, 0.94), Color(1, 1, 1)]
 	for i in cols.size():
-		_door(Vector2(0, -i * 1.5), 15.0 - i * 2.6, 38.0 - i * 4.0, cols[i].lerp(Color.WHITE, 0.15 * pulse))
+		_door(Vector2.ZERO, 15.0 - i * 2.6, 38.0 - i * 3.0, cols[i].lerp(Color.WHITE, 0.15 * pulse))
 
 
 func _door(base: Vector2, half: float, h: float, c: Color) -> void:
@@ -755,15 +876,16 @@ func _open_portal() -> void:
 ## Through the door: a blinding flash. (Layer 2 later; for now Limbo starts over.)
 func _enter_portal() -> void:
 	witch.frozen = true
-	Sfx.play("arrive_flash", 0.0, -2.0)
-	var pull := witch.create_tween()
-	pull.tween_property(witch, "global_position", PORTAL_AT + Vector2(0, -4), 0.5).set_trans(Tween.TRANS_SINE)
-	pull.parallel().tween_property(witch.visual, "scale", Vector2(0.3, 1.6), 0.5)
+	var fade := witch.create_tween()
+	fade.tween_property(witch, "global_position", PORTAL_AT + Vector2(0, -3), 0.5).set_trans(Tween.TRANS_SINE)
+	fade.parallel().tween_property(witch, "modulate:a", 0.0, 0.6)
+	await fade.finished
+	Sfx.play("arrive_flash", 0.0, -6.0)
 	_flash.color = Color(1, 1, 1, 0)
 	var t := _flash.create_tween()
-	t.tween_property(_flash, "color:a", 1.0, 0.6)
+	t.tween_property(_flash, "color:a", 1.0, 0.8)
 	await t.finished
-	await _wait(0.8)
+	await _wait(0.6)
 	Game.change_level("limbo")
 
 
@@ -872,9 +994,11 @@ func _build_warden() -> void:
 	smoke.position = Vector2(8, -14)
 	var body := StaticBody2D.new()
 	body.collision_layer = 1
-	var col := CollisionShape2D.new()
-	var c := CircleShape2D.new()
-	c.radius = 24.0
-	col.shape = c
+	var col := CollisionPolygon2D.new()
+	var pts := PackedVector2Array()
+	for k in 24:
+		var a := k / 24.0 * TAU
+		pts.append(CLOAK_C + Vector2(cos(a) * CLOAK_R.x, sin(a) * CLOAK_R.y))
+	col.polygon = pts
 	body.add_child(col)
 	warden.add_child(body)

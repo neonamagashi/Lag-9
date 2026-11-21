@@ -159,7 +159,7 @@ func _start_wave(i: int) -> void:
 		for k in 24:
 			var a := k / 24.0 * TAU
 			var p := witch.global_position + Vector2(cos(a), sin(a) * 0.75) * randf_range(190, 250)
-			if Limbo.BOUNDS.grow(-30).has_point(p) and p.distance_to(Limbo.WARDEN_AT) > 60.0:
+			if Limbo.BOUNDS.grow(-30).has_point(p) and not Limbo.in_cloak(p, 16.0) and p.distance_to(Limbo.PORTAL_AT) > 30.0:
 				spots.append(p)
 	for p in _open:
 		var dd := p.distance_to(witch.global_position)

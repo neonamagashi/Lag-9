@@ -100,8 +100,9 @@ func _process(delta: float) -> void:
 			speak(SOLO[randi() % SOLO.size()])
 
 
-func speak(line: String) -> void:
-	Dialogue.say(self, line, "", 1.0, Color(0.45, 0.43, 0.5), 32.0 if mode != Mode.SIT else 28.0, 6)
+func speak(line: String, to_her := false) -> void:
+	var c := Color(0.25, 0.22, 0.32) if to_her else Color(0.45, 0.43, 0.5)
+	Dialogue.say(self, line, "", 1.0, c, 32.0 if mode != Mode.SIT else 28.0, 7 if to_her else 6)
 	_audio.pitch_scale = randf_range(0.85, 1.15)
 	_audio.play()
 
